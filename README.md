@@ -24,4 +24,4 @@ Os dados ficam no navegador (IndexedDB). Faça backup em **Ajustes → Exportar 
 ## Site no ar
 
 Publicado automaticamente pelo GitHub Pages a cada envio para `main`:
-**https://viniciusrisse.github.io/tjsp/**
+**https://viniciusrisse.github.io/TJSP/**
