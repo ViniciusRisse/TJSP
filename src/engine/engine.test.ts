@@ -173,3 +173,45 @@ describe('risco, retorno e semana', () => {
     expect(wr.adjustments.length).toBeGreaterThan(0);
   });
 });
+
+describe('ciclo aberto (teoria feita, questões pendentes)', () => {
+  function withYesterday(s: AppState, daysBack: number, learnStatus: 'feita' | 'pendente', startedAt?: number) {
+    const date = addDays(TODAY, -daysBack);
+    s.missions[date] = {
+      date, availableMin: 60, mood: 'normal', phase: 1, mode: 'normal', headline: '', message: '', objective: '', reasons: [], createdAt: 0,
+      tasks: [
+        { id: 'a', kind: 'aprendizado', title: '', topicId: 'pp-cit', disciplineId: 'ppenal', minutes: 20, instructions: [], where: [], status: learnStatus, startedAt },
+        { id: 'q', kind: 'questoes', title: '', topicId: 'pp-cit', disciplineId: 'ppenal', minutes: 20, questions: 10, instructions: [], where: [], status: 'pendente' },
+      ],
+    };
+    s.sessions = learnStatus === 'feita' ? [{ id: 's', date, topicId: 'pp-cit', disciplineId: 'ppenal', kind: 'teoria', minutes: 40, fromMission: true }] : [];
+    s.user.lastActiveDate = date;
+    return date;
+  }
+  it('retoma as questões no lugar do tema principal, sem repetir a teoria e sem somar tempo', () => {
+    const s = createInitialState();
+    withYesterday(s, 1, 'feita');
+    const m = buildMission(ctx(s), { minutes: 60, mood: 'normal' });
+    expect(m.resumedFrom?.topicId).toBe('pp-cit');
+    expect(m.message).toContain('fechar esse ciclo');
+    expect(m.tasks[0].topicId).toBe('pp-cit');
+    expect(m.tasks.some((t) => t.topicId === 'pp-cit' && t.kind === 'questoes')).toBe(true);
+    expect(m.tasks.some((t) => t.topicId === 'pp-cit' && t.kind === 'aprendizado')).toBe(false);
+    expect(missionMinutes(m)).toBeLessThanOrEqual(65);
+  });
+  it('também retoma quando a teoria foi aberta e não marcada como concluída', () => {
+    const s = createInitialState();
+    withYesterday(s, 1, 'pendente', Date.now());
+    expect(buildMission(ctx(s), { minutes: 60, mood: 'normal' }).resumedFrom?.topicId).toBe('pp-cit');
+  });
+  it('não retoma depois de 3 dias, nem se já houve questões, nem se foi dispensado', () => {
+    const a = createInitialState(); withYesterday(a, 4, 'feita');
+    expect(buildMission(ctx(a), { minutes: 60, mood: 'normal' }).resumedFrom).toBeUndefined();
+    const b = createInitialState(); const d = withYesterday(b, 1, 'feita');
+    b.attempts = attempts('pp-cit', 'ppenal', ['seguro'], d);
+    expect(buildMission(ctx(b), { minutes: 60, mood: 'normal' }).resumedFrom).toBeUndefined();
+    const c = createInitialState(); const d2 = withYesterday(c, 1, 'feita');
+    c.dismissedCycles = [`${d2}|pp-cit`];
+    expect(buildMission(ctx(c), { minutes: 60, mood: 'normal' }).resumedFrom).toBeUndefined();
+  });
+});

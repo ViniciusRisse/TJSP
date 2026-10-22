@@ -176,6 +176,7 @@ export interface MissionTask {
   reviewTopicIds?: string[];
   flashcardCount?: number;
   simulationId?: string;
+  partial?: boolean;       // tarefa feita só em parte (tempo real registrado)
 }
 
 export interface DailyMission {
@@ -192,6 +193,7 @@ export interface DailyMission {
   createdAt: number;
   completedAt?: number;
   startedAt?: number;
+  resumedFrom?: { topicId: string; date: string }; // ciclo aberto retomado (teoria feita, questões pendentes)
 }
 
 export type SimulationKind = 'mini' | 'parcial' | 'completo';
@@ -347,5 +349,6 @@ export interface AppState {
   essays: Essay[];
   distraction: DistractionLog[];
   returnProtocol?: { startedOn: string; step: number } | null;
+  dismissedCycles?: string[];   // "data|tópico" de ciclos que a estudante preferiu não retomar
   updatedAt: number;
 }

@@ -210,6 +210,34 @@ function essayTask(ctx: MissionContext, minutes: number): MissionTask {
 
 interface Pick { topic: Topic; pr: PriorityResult; adjusted: number }
 
+export const CYCLE_WINDOW_DAYS = 3;
+
+/**
+ * Ciclo aberto: numa missão dos últimos 3 dias, a teoria de um tópico foi feita (mesmo que em parte),
+ * mas as questões desse tópico ficaram pendentes e nada foi registrado nele depois.
+ * Não é compensação: as questões entram NO LUGAR do tema principal de hoje, dentro do tempo de hoje.
+ */
+export function findOpenCycle(state: AppState, today: string): { topicId: string; date: string } | null {
+  const dismissed = new Set(state.dismissedCycles || []);
+  for (let back = 1; back <= CYCLE_WINDOW_DAYS; back++) {
+    const date = addDays(today, -back);
+    const m = state.missions[date];
+    if (!m) continue;
+    // teoria concluída, ou aberta e não concluída (a estudante estudou mas não marcou)
+    const learned = m.tasks.filter((t) => (t.kind === 'aprendizado' || t.kind === 'leiseca') && t.topicId && (t.status === 'feita' || (t.status === 'pendente' && !!t.startedAt)));
+    for (const lt of learned) {
+      const qPending = m.tasks.some((t) => t.topicId === lt.topicId && (t.kind === 'questoes' || t.kind === 'diagnostico') && t.status !== 'feita');
+      if (!qPending) continue;
+      const practicedSince = state.attempts.some((a) => a.topicId === lt.topicId && a.date >= date);
+      if (practicedSince || dismissed.has(`${date}|${lt.topicId}`)) continue;
+      return { topicId: lt.topicId!, date };
+    }
+    // a missão mais recente que existe decide: não volta além dela
+    if (m.tasks.some((t) => t.status === 'feita')) break;
+  }
+  return null;
+}
+
 function pickTopics(ctx: MissionContext, opts: { onlyStarted?: boolean; exclude?: string[]; avoidDiscipline?: string; preferOtherBlockThan?: string }): Pick[] {
   const { state, stats, prio, today } = ctx;
   const mins = minutesByDiscipline7d(state, today);
@@ -351,11 +379,20 @@ export function buildMission(ctx: MissionContext, input: MissionInput): DailyMis
   if (dueR.length || dueC.length) reviewMin = T >= 40 ? r5(T * mix.revisao) : 5;
   if (phase === 5) reviewMin = Math.max(reviewMin, r5(T * mix.revisao));
 
-  const main = pickTopics(ctx, { onlyStarted: mode === 'cansada' && started })[0];
+  // Ciclo aberto (teoria feita, questões pendentes): fechar esse ciclo é a melhor utilização do tempo
+  const cycle = mode === 'normal' || mode === 'cansada' ? findOpenCycle(state, today) : null;
+  const cycleTopic = cycle ? state.topics.find((t) => t.id === cycle.topicId) : undefined;
+  const main = cycleTopic && ctx.prio[cycleTopic.id]
+    ? { topic: cycleTopic, pr: ctx.prio[cycleTopic.id], adjusted: ctx.prio[cycleTopic.id].score }
+    : pickTopics(ctx, { onlyStarted: mode === 'cansada' && started })[0];
+  if (cycleTopic) {
+    message = `Você estudou a teoria de ${cycleTopic.name}. Vamos fechar esse ciclo com as questões.`;
+    reasons.push(`Ciclo aberto: teoria de ${cycleTopic.name} feita, questões pendentes. Questões logo depois da teoria fixam o conteúdo.`);
+  }
   let learnMin = 0;
   const mainStats = main ? stats[main.topic.id] : undefined;
-  const needsLearning = main && (mode !== 'cansada' || !started) && (!mainStats!.started || (mainStats!.n < 10 && mainStats!.mastery < 50));
-  const needsTrapTraining = main && mainStats && isDireito(disc(state, main.topic.disciplineId)) && mainStats.n >= 10 && (mainStats.levelB ?? 100) < 60;
+  const needsLearning = main && !cycleTopic && (mode !== 'cansada' || !started) && (!mainStats!.started || (mainStats!.n < 10 && mainStats!.mastery < 50));
+  const needsTrapTraining = main && !cycleTopic && mainStats && isDireito(disc(state, main.topic.disciplineId)) && mainStats.n >= 10 && (mainStats.levelB ?? 100) < 60;
   if (needsLearning) learnMin = Math.min(T >= 150 ? 40 : 30, Math.max(10, r5(T * Math.max(mix.novo, phase >= 4 ? 0.15 : 0))));
   else if (needsTrapTraining) learnMin = Math.min(20, r5(T * 0.15));
 
@@ -388,7 +425,12 @@ export function buildMission(ctx: MissionContext, input: MissionInput): DailyMis
       }
       if (rest > 0) { if (extra.length) extra[extra.length - 1] += rest; else mainSlot += rest; }
     }
-    tasks.push(...questionsTask(ctx, main.topic, mainSlot, why, true));
+    const qs = questionsTask(ctx, main.topic, mainSlot, cycleTopic ? 'Fechar o ciclo: a teoria já foi feita.' : why, true);
+    if (cycleTopic) {
+      qs[0].title = `Questões — ${main.topic.name} (fechando o ciclo)`;
+      qs[0].instructions.unshift('A teoria já foi feita. Comece direto pelas questões, sem reler antes: o esforço de lembrar é o que fixa o conteúdo.');
+    }
+    tasks.push(...qs);
     reasons.push(`${disc(state, main.topic.disciplineId)?.short} — ${main.topic.name}: ${main.pr.reasons.join('; ')}`);
 
     const usedDisc = [main.topic.disciplineId];
@@ -415,7 +457,9 @@ export function buildMission(ctx: MissionContext, input: MissionInput): DailyMis
   tasks.push(...reviewTasks(ctx, reviewMin));
   if (essayMin) tasks.push(essayTask(ctx, essayMin));
   if (!message && main) message = `Hoje ${disc(state, main.topic.disciplineId)?.short} é a melhor utilização do seu tempo.`;
-  return finalize(ctx, input, mode, T, message, tasks, reasons);
+  const m = finalize(ctx, input, mode, T, message, tasks, reasons);
+  if (cycle && cycleTopic) m.resumedFrom = cycle;
+  return m;
 }
 
 function finalize(ctx: MissionContext, input: MissionInput, mode: DailyMission['mode'], T: number, message: string, tasks: MissionTask[], reasons: string[]): DailyMission {

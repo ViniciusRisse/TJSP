@@ -11,7 +11,7 @@ import * as sync from './sync';
 import { addDays, diffDays, today as todayFn, uid } from '../engine/dates';
 import { computeDisciplineStats, computeTopicStats, RESULT_META } from '../engine/mastery';
 import { computePriorities, currentPhase } from '../engine/priority';
-import { buildMission, defaultMinutesFor, type MissionContext } from '../engine/mission';
+import { buildMission, defaultMinutesFor, findOpenCycle, type MissionContext } from '../engine/mission';
 import { answerFlashcard, nextReview, type FlashAnswer } from '../engine/review';
 import { shouldStartProtocol } from '../engine/absence';
 import { buildWeeklyReport, needsWeeklyReport, snapshotMetric } from '../engine/weekly';
@@ -106,7 +106,12 @@ export function onOpen() {
       s.metrics.push(snapshotMetric(s, addDays(today, -1)));
     }
     s.user.lastOpenDate = today;
-    if (!s.missions[today]) s.missions[today] = generateMission(s, today, defaultMinutesFor(s, today), 'normal');
+    const cur = s.missions[today];
+    if (!cur) s.missions[today] = generateMission(s, today, defaultMinutesFor(s, today), 'normal');
+    else if (!cur.startedAt && !cur.resumedFrom && cur.tasks.every((t) => t.status === 'pendente') && findOpenCycle(s, today)) {
+      // missão de hoje foi gerada antes de existir a regra do ciclo aberto: refaz com os mesmos parâmetros
+      s.missions[today] = generateMission(s, today, cur.availableMin, cur.mood);
+    }
   });
 }
 
@@ -184,6 +189,23 @@ function markActive(s: AppState, today: string) {
 
 function unlockFlashcards(s: AppState, topicId: string, today: string) {
   for (const c of s.flashcards) if (c.topicId === topicId && c.nextDate === LOCKED_DATE) c.nextDate = addDays(today, 1);
+}
+
+/** Dispensa a retomada do ciclo aberto e refaz a missão de hoje sem ele. */
+export function dismissCycle() {
+  const today = getToday();
+  const m = state.missions[today];
+  if (!m?.resumedFrom) return;
+  const key = `${m.resumedFrom.date}|${m.resumedFrom.topicId}`;
+  setState((s) => { s.dismissedCycles = [...(s.dismissedCycles || []), key]; });
+  setMissionParams(m.availableMin, m.mood);
+}
+
+/** Parei no meio: registra o tempo real e marca a tarefa como feita em parte. */
+export function completeTaskPartial(taskId: string, minutesSpent: number) {
+  completeTask(taskId, minutesSpent);
+  const today = getToday();
+  setState((s) => { const t = s.missions[today]?.tasks.find((x) => x.id === taskId); if (t) t.partial = true; });
 }
 
 export function completeTask(taskId: string, minutesSpent?: number) {

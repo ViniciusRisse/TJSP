@@ -50,6 +50,7 @@ export function createInitialState(now = Date.now()): AppState {
     patterns: structuredClone(DEFAULT_PATTERNS),
     metrics: [], weeklyReports: [], essays: [], distraction: [],
     returnProtocol: null,
+    dismissedCycles: [],
     updatedAt: now,
   };
 }
@@ -80,6 +81,7 @@ export function migrate(raw: any): AppState {
     if (!Array.isArray((s as any)[k])) (s as any)[k] = [];
   }
   if (!s.reviews || typeof s.reviews !== 'object') s.reviews = {};
+  if (!Array.isArray(s.dismissedCycles)) s.dismissedCycles = [];
   if (!s.missions || typeof s.missions !== 'object') s.missions = {};
   s.schemaVersion = SCHEMA_VERSION;
   return s;

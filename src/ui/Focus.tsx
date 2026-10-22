@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { completeReview, completeTask, getToday, skipTask, startTask, useAppState } from '../state/store';
+import { completeReview, completeTask, completeTaskPartial, getToday, skipTask, startTask, useAppState } from '../state/store';
 import { RESULT_META } from '../engine/mastery';
 import { ErrorForm, FlashDeck, LogQuestions } from './Logging';
 import { fmtMin, topicName } from './common';
@@ -16,8 +16,10 @@ export default function Focus({ go }: { go: (v: View) => void }) {
   const [loggedIds, setLoggedIds] = useState<string[]>([]);
   const [openErr, setOpenErr] = useState<string | null>(null);
   const [reviewScore, setReviewScore] = useState<number | null>(null);
+  const [partialOpen, setPartialOpen] = useState(false);
+  const [partialMin, setPartialMin] = useState('');
 
-  useEffect(() => { if (task && !task.startedAt) startTask(task.id); setStage('fazer'); setReviewScore(null); setOpenErr(null); }, [task?.id]);
+  useEffect(() => { if (task && !task.startedAt) startTask(task.id); setStage('fazer'); setReviewScore(null); setOpenErr(null); setPartialOpen(false); setPartialMin(''); }, [task?.id]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   if (!m) return <div className="page narrow"><p>Missão ainda não gerada.</p><button className="btn" onClick={() => go('hoje')}>Voltar</button></div>;
@@ -142,7 +144,25 @@ export default function Focus({ go }: { go: (v: View) => void }) {
         </section>
       )}
 
-      {(task.kind === 'aprendizado' || task.kind === 'leiseca') && <button className="btn primary big" onClick={finish}>Concluir tarefa</button>}
+      {(task.kind === 'aprendizado' || task.kind === 'leiseca') && (
+        <>
+          <button className="btn primary big" onClick={finish}>Concluir tarefa</button>
+          {!partialOpen ? (
+            <button className="btn small" onClick={() => { setPartialMin(String(Math.max(5, Math.round(elapsed / 60)))); setPartialOpen(true); }}>Parei no meio — registrar o que fiz</button>
+          ) : (
+            <div className="card tight stack sm">
+              <span className="small">Quanto tempo você estudou desta tarefa?</span>
+              <div className="row">
+                <input id="partial-min" type="number" min={1} value={partialMin} onChange={(e) => setPartialMin(e.target.value)} style={{ width: 90 }} aria-label="Minutos estudados" />
+                <span className="small">min</span>
+                <button className="btn primary small" onClick={() => completeTaskPartial(task.id, Math.max(1, Number(partialMin) || 1))}>Registrar</button>
+                <button className="btn ghost small" onClick={() => setPartialOpen(false)}>Cancelar</button>
+              </div>
+              <span className="tiny muted">O que você fez conta. Se as questões ficarem para depois, a próxima missão começa por elas.</span>
+            </div>
+          )}
+        </>
+      )}
 
       <button className="btn ghost small" onClick={() => skipTask(task.id)}>Pular esta tarefa hoje</button>
       {loggedIds.length > 0 && <span className="tiny muted">Último registro: {loggedIds.length} questões.</span>}

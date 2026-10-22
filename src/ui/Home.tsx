@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Mood } from '../types';
-import { getToday, markRestDay, setMissionParams, startMission, updateUser, useAppState, useDerived } from '../state/store';
+import { dismissCycle, getToday, markRestDay, setMissionParams, startMission, updateUser, useAppState, useDerived } from '../state/store';
 import { daysLeft, PHASES } from '../engine/priority';
 import { evidenceStatements } from '../engine/metrics';
 import { detectReturn } from '../engine/absence';
@@ -66,6 +66,11 @@ export default function Home({ go }: { go: (v: View) => void }) {
             <div className="eyebrow">🎯 Objetivo</div>
             <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{m.objective}</div>
             {m.message && <p className="small" style={{ opacity: .9 }}>{m.message}</p>}
+            {m.resumedFrom && done === 0 && !completed && (
+              <button className="btn small" style={{ alignSelf: 'flex-start', background: 'transparent', color: 'inherit', borderColor: 'color-mix(in srgb, currentColor 45%, transparent)' }} onClick={dismissCycle}>
+                Seguir com a missão nova
+              </button>
+            )}
           </div>
           <div>
             {m.tasks.map((t, i) => (
