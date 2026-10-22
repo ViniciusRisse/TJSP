@@ -20,7 +20,7 @@ const NAV: { id: View; label: string; ico: string }[] = [
   { id: 'hoje', label: 'Hoje', ico: '▶' },
   { id: 'mapa', label: 'Mapa de Guerra', ico: '▦' },
   { id: 'revisar', label: 'Revisar', ico: '↻' },
-  { id: 'erros', label: 'Meus Erros', ico: '✕' },
+  { id: 'erros', label: 'Caderno de erros', ico: '✕' },
   { id: 'simulados', label: 'Simulados', ico: '◷' },
   { id: 'evolucao', label: 'Evolução', ico: '↗' },
   { id: 'vunesp', label: 'DNA VUNESP', ico: '§' },

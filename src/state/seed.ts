@@ -51,6 +51,7 @@ export function createInitialState(now = Date.now()): AppState {
     metrics: [], weeklyReports: [], essays: [], distraction: [],
     returnProtocol: null,
     dismissedCycles: [],
+    subtopicProgress: {},
     updatedAt: now,
   };
 }
@@ -82,6 +83,18 @@ export function migrate(raw: any): AppState {
   }
   if (!s.reviews || typeof s.reviews !== 'object') s.reviews = {};
   if (!Array.isArray(s.dismissedCycles)) s.dismissedCycles = [];
+  if (!s.subtopicProgress || typeof s.subtopicProgress !== 'object') {
+    // antes da teoria por partes: tópico com teoria concluída por inteiro conta como todo estudado
+    s.subtopicProgress = {};
+    for (const m of Object.values(s.missions || {})) {
+      for (const t of (m as any).tasks || []) {
+        if ((t.kind === 'aprendizado' || t.kind === 'leiseca') && t.status === 'feita' && !t.partial && !t.subtopicId && t.topicId) {
+          const topic = s.topics.find((x) => x.id === t.topicId);
+          if (topic) s.subtopicProgress[t.topicId] = topic.subtopics.map((x) => x.id);
+        }
+      }
+    }
+  }
   if (!s.missions || typeof s.missions !== 'object') s.missions = {};
   s.schemaVersion = SCHEMA_VERSION;
   return s;

@@ -68,7 +68,7 @@ export default function Review({ go }: { go: (v: View) => void }) {
         {deck ? <div className="card"><FlashDeck onFinish={() => setDeck(false)} /></div>
           : <button className="btn primary" disabled={!cards.length} onClick={() => setDeck(true)}>Revisar {cards.length} flashcards</button>}
         <NewFlashcard />
-        <button className="btn ghost small" onClick={() => go('erros')}>Ir para Meus Erros</button>
+        <button className="btn ghost small" onClick={() => go('erros')}>Ir para o Caderno de erros</button>
       </section>
     </div>
   );

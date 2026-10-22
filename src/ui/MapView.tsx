@@ -160,10 +160,10 @@ function TopicDetail({ topic, onClose, go }: { topic: Topic; onClose: () => void
             <p className="small">{topic.editalRef}</p>
           </div>
           <div className="stack sm">
-            <div className="eyebrow">Subtemas</div>
+            <div className="eyebrow">Subtemas — teoria estudada {(s.subtopicProgress?.[topic.id] || []).length} de {topic.subtopics.length}</div>
             <ul className="clean small">
               {topic.subtopics.map((x) => (
-                <li key={x.id}>• {x.name}{x.articles && <> <span className="stampchip">{x.articles}</span></>}{x.note && <span className="muted"> — {x.note}</span>}</li>
+                <li key={x.id}>{(s.subtopicProgress?.[topic.id] || []).includes(x.id) ? '✓' : '•'} {x.name}{x.articles && <> <span className="stampchip">{x.articles}</span></>}{x.note && <span className="muted"> — {x.note}</span>}</li>
               ))}
             </ul>
           </div>

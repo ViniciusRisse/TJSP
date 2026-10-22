@@ -176,7 +176,8 @@ export interface MissionTask {
   reviewTopicIds?: string[];
   flashcardCount?: number;
   simulationId?: string;
-  partial?: boolean;       // tarefa feita só em parte (tempo real registrado)
+  partial?: boolean;
+  subtopicId?: string;      // pedaço da teoria desta tarefa       // tarefa feita só em parte (tempo real registrado)
 }
 
 export interface DailyMission {
@@ -349,6 +350,7 @@ export interface AppState {
   essays: Essay[];
   distraction: DistractionLog[];
   returnProtocol?: { startedOn: string; step: number } | null;
-  dismissedCycles?: string[];   // "data|tópico" de ciclos que a estudante preferiu não retomar
+  dismissedCycles?: string[];
+  subtopicProgress?: Record<string, string[]>; // subtemas de teoria já estudados, por tópico   // "data|tópico" de ciclos que a estudante preferiu não retomar
   updatedAt: number;
 }

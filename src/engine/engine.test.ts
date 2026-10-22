@@ -8,6 +8,7 @@ import { nextReview } from './review';
 import { detectReturn } from './absence';
 import { addDays } from './dates';
 import { computeRisk, returnRate } from './metrics';
+import { paceCalibration } from './pace';
 import { buildWeeklyReport } from './weekly';
 
 const TODAY = '2026-10-21';
@@ -213,5 +214,36 @@ describe('ciclo aberto (teoria feita, questões pendentes)', () => {
     const c = createInitialState(); const d2 = withYesterday(c, 1, 'feita');
     c.dismissedCycles = [`${d2}|pp-cit`];
     expect(buildMission(ctx(c), { minutes: 60, mood: 'normal' }).resumedFrom).toBeUndefined();
+  });
+});
+
+describe('teoria por partes e ritmo real', () => {
+  it('a teoria cobre um subtema por vez, não o tópico inteiro', () => {
+    const s = createInitialState();
+    s.topics = s.topics.map((t) => (t.id === 'dc-art5' ? t : { ...t, share: t.share }));
+    const c = ctx(s);
+    c.prio['dc-art5'].score = 999; // força o art. 5º como tema principal
+    const m = buildMission(c, { minutes: 120, mood: 'normal' });
+    const learn = m.tasks.find((t) => t.kind === 'aprendizado' && t.topicId === 'dc-art5')!;
+    expect(learn.subtopicId).toBe('dc-art5-1');
+    expect(learn.title).toContain('parte 1 de 4');
+    s.subtopicProgress = { 'dc-art5': ['dc-art5-1'] };
+    const c2 = ctx(s); c2.prio['dc-art5'].score = 999;
+    const m2 = buildMission(c2, { minutes: 120, mood: 'normal' });
+    expect(m2.tasks.find((t) => t.kind === 'aprendizado' && t.topicId === 'dc-art5')!.subtopicId).toBe('dc-art5-2');
+  });
+  it('aprende o ritmo real: teoria que leva o dobro ganha o dobro de tempo, sem estourar o dia', () => {
+    const s = createInitialState();
+    const base = new Date(TODAY + 'T09:00:00').getTime();
+    for (let i = 1; i <= 3; i++) {
+      const date = addDays(TODAY, -i);
+      s.missions[date] = { date, availableMin: 60, mood: 'normal', phase: 1, mode: 'normal', headline: '', message: '', objective: '', reasons: [], createdAt: 0,
+        tasks: [{ id: 'l' + i, kind: 'aprendizado', title: '', topicId: 'pt-conc', minutes: 30, instructions: [], where: [], status: 'feita', startedAt: base - i * 864e5, doneAt: base - i * 864e5 + 60 * 60000, subtopicId: 'x' }] };
+    }
+    expect(paceCalibration(s, TODAY).learn).toBeCloseTo(2, 1);
+    const m = buildMission(ctx(s), { minutes: 120, mood: 'normal' });
+    const learn = m.tasks.find((t) => t.kind === 'aprendizado')!;
+    expect(learn.minutes).toBeGreaterThanOrEqual(45);
+    expect(missionMinutes(m)).toBeLessThanOrEqual(125);
   });
 });

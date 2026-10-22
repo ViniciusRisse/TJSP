@@ -203,12 +203,10 @@ export function dismissCycle() {
 
 /** Parei no meio: registra o tempo real e marca a tarefa como feita em parte. */
 export function completeTaskPartial(taskId: string, minutesSpent: number) {
-  completeTask(taskId, minutesSpent);
-  const today = getToday();
-  setState((s) => { const t = s.missions[today]?.tasks.find((x) => x.id === taskId); if (t) t.partial = true; });
+  completeTask(taskId, minutesSpent, true);
 }
 
-export function completeTask(taskId: string, minutesSpent?: number) {
+export function completeTask(taskId: string, minutesSpent?: number, partial = false) {
   const today = getToday();
   setState((s) => {
     const m = s.missions[today];
@@ -216,6 +214,12 @@ export function completeTask(taskId: string, minutesSpent?: number) {
     if (!m || !t || t.status === 'feita') return;
     t.status = 'feita';
     t.doneAt = Date.now();
+    if (partial) t.partial = true;
+    // pedaço de teoria concluído por inteiro → o próximo subtema entra na próxima missão
+    if (!partial && t.subtopicId && t.topicId && (t.kind === 'aprendizado' || t.kind === 'leiseca')) {
+      const list = (s.subtopicProgress ||= {})[t.topicId] ||= [];
+      if (!list.includes(t.subtopicId)) list.push(t.subtopicId);
+    }
     const minutes = Math.max(1, Math.round(minutesSpent ?? t.minutes));
     s.sessions.push({ id: uid('s-'), date: today, topicId: t.topicId, disciplineId: t.disciplineId, kind: KIND_TO_SESSION[t.kind], minutes, fromMission: true });
     if (t.topicId) unlockFlashcards(s, t.topicId, today);

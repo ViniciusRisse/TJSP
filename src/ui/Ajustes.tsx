@@ -6,6 +6,7 @@ import {
 } from '../state/store';
 import { saveFile, syncAvailable } from '../state/sync';
 import { useToast } from './common';
+import { paceCalibration } from '../engine/pace';
 
 const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEIGHT_LABEL: Record<keyof PriorityWeights, string> = {
@@ -74,6 +75,8 @@ export default function Ajustes() {
         </div>
         <span className="tiny muted">Dias de estudo planejados. Dia sem estudo não gera atraso: a missão seguinte se reorganiza.</span>
       </section>
+
+      <PaceCard />
 
       <section className="card stack">
         <h2>Peso da prioridade</h2>
@@ -177,5 +180,25 @@ export default function Ajustes() {
         <p className="small ink2">Princípios: consistência &gt; intensidade · adaptação &gt; cronograma rígido · evidência &gt; sensação · questões + correção &gt; horas · prioridade &gt; completude · continuidade &gt; compensação.</p>
       </section>
     </div>
+  );
+}
+
+function PaceCard() {
+  const s = useAppState();
+  const p = paceCalibration(s, getToday());
+  const row = (label: string, r: number, n: number) => (
+    <li>{label}: {n >= 2 ? <b>{r.toFixed(1).replace('.', ',')}× o previsto</b> : <span className="muted">aprendendo ({n} de 2 tarefas medidas)</span>}</li>
+  );
+  return (
+    <section className="card stack sm">
+      <h2>Seu ritmo real</h2>
+      <p className="small ink2">O sistema mede quanto cada tarefa realmente levou e ajusta as próximas missões a esse ritmo. Não existe ritmo certo: existe o seu.</p>
+      <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+        {row('Teoria / lei seca', p.learn, p.samples.learn)}
+        {row('Questões', p.questions, p.samples.questions)}
+        {row('Correção', p.correction, p.samples.correction)}
+      </ul>
+      <span className="tiny muted">Baseado nas tarefas concluídas nos últimos 28 dias (tarefas marcadas como "parei no meio" não entram).</span>
+    </section>
   );
 }

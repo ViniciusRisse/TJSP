@@ -11,6 +11,14 @@ import { detectReturn, lastStudiedTopics, RETURN_MESSAGE } from './absence';
 import { nextSimulationSpec, simulationDue } from './simulations';
 import { ESSAY_PHASES } from '../data/vunesp';
 import { LINKS } from '../data/edital';
+import { nextSubtopic, paceCalibration, type PaceCalibration } from './pace';
+
+const paceCache = new WeakMap<AppState, PaceCalibration>();
+function paceOf(ctx: MissionContext): PaceCalibration {
+  let p = paceCache.get(ctx.state);
+  if (!p) { p = paceCalibration(ctx.state, ctx.today); paceCache.set(ctx.state, p); }
+  return p;
+}
 
 export const TIME_OPTIONS = [20, 40, 60, 90, 120, 180];
 
@@ -96,10 +104,16 @@ function pastRefs(t: Topic): string | null {
 function learnTask(ctx: MissionContext, t: Topic, minutes: number, why: string, short = false): MissionTask {
   const d = disc(ctx.state, t.disciplineId);
   const ins: string[] = [];
+  // um pedaço por vez: o próximo subtema ainda não estudado
+  const next = t.subtopics.length > 1 ? nextSubtopic(ctx.state, t) : null;
+  const part = next ? ` (parte ${next.index + 1} de ${t.subtopics.length})` : '';
+  const articles = next?.sub.articles || t.articles;
+  if (next) ins.push(`Só esta parte: ${next.sub.name}${next.sub.articles ? ` — ${next.sub.articles}` : ''}. O restante do tópico vem nas próximas missões.`);
   if (isDireito(d)) {
-    ins.push(`Leia a lei seca${t.articles ? ` (${t.articles})` : ''}, com todos os parágrafos.`);
+    ins.push(`Leia a lei seca${articles ? ` (${articles})` : ''}, com todos os parágrafos.`);
     ins.push('Marque prazos, números e as palavras "salvo", "exceto", "inclusive", "desde que", "somente".');
     if (t.traps.includes('instituto-vizinho')) ins.push('Monte um quadro comparativo com o instituto vizinho (ex.: impedimento × suspeição).');
+    ins.push('Anotações curtas: só o que a banca pode trocar (prazo, número, exceção, condição). Copiar a lei inteira gasta tempo e rende pouco.');
     ins.push('Termine criando 2–3 flashcards curtos (um número, uma exceção, uma diferença).');
   } else if (d?.id === 'rlm' || d?.id === 'mat') {
     ins.push('Estude o resumo do tópico com 2 exemplos resolvidos, do básico ao intermediário.');
@@ -115,13 +129,14 @@ function learnTask(ctx: MissionContext, t: Topic, minutes: number, why: string, 
   if (t.where) where.push({ label: t.where });
   for (const l of t.links || []) where.push({ label: l.label, url: l.url });
   if (ctx.state.settings.materials.videos && !isDireito(d)) where.push({ label: 'Opcional: 1 vídeo curto (até 15 min) sobre o tema — só conta como estudo dentro desta tarefa' });
-  return { id: uid('t-'), kind: 'aprendizado', title: `Aprendizado — ${t.name}`, topicId: t.id, disciplineId: t.disciplineId, minutes, instructions: ins, where, why, status: 'pendente' };
+  return { id: uid('t-'), kind: 'aprendizado', title: `Aprendizado — ${t.name}${next ? `: ${next.sub.name}` : ''}${part}`, topicId: t.id, disciplineId: t.disciplineId, subtopicId: next?.sub.id, minutes, instructions: ins, where, why, status: 'pendente' };
 }
 
 function questionsTask(ctx: MissionContext, t: Topic, slotMin: number, why: string, withCorrection: boolean): MissionTask[] {
   const d = disc(ctx.state, t.disciplineId);
-  const pace = (d?.pacePerQuestionMin ?? 2) / Math.max(0.5, ctx.state.settings.questionPaceFactor);
-  let q = Math.max(5, Math.floor(slotMin / (pace + CORR_PER_Q)));
+  const cal = paceOf(ctx);
+  const pace = ((d?.pacePerQuestionMin ?? 2) * cal.questions) / Math.max(0.5, ctx.state.settings.questionPaceFactor);
+  let q = Math.max(5, Math.floor(slotMin / (pace + CORR_PER_Q * cal.correction)));
   if (q >= 10) q = Math.floor(q / 5) * 5;
   const qMin = Math.max(5, Math.round(q * pace));
   const corr = Math.max(5, slotMin - qMin);
@@ -147,10 +162,10 @@ function questionsTask(ctx: MissionContext, t: Topic, slotMin: number, why: stri
     minutes: corr, questions: q,
     instructions: [
       'Registre cada questão com a classificação: 🟢 seguro · 🟠 dúvida · 🟡 chute · 🔴 não sabia · 🔵 atenção · 🟣 interpretação · ⚫ confusão.',
-      'Para cada erro, leia o comentário/lei e escreva a regra correta e a pegadinha em uma linha.',
-      'Erros detalhados viram flashcards automaticamente.',
+      'Para cada erro, leia o comentário/lei e anote no seu CADERNO DE ERROS (físico): tópico, questão, tipo do erro, regra correta e pegadinha — uma linha cada.',
+      'Se a regra for um número, prazo ou exceção, crie também um flashcard (aba Revisar).',
     ],
-    where: [{ label: 'Registro na própria tarefa (botão "Registrar questões")' }], why: 'Correção é onde o erro vira aprendizado.', status: 'pendente',
+    where: [{ label: 'Seu caderno de erros (modelo em PDF na aba Caderno de erros)' }], why: 'Correção é onde o erro vira aprendizado.', status: 'pendente',
   };
   if (withCorrection) return [...tasks, corrTask];
   // tarefa combinada (tópicos secundários): questões + correção no mesmo bloco
@@ -178,11 +193,11 @@ function reviewTasks(ctx: MissionContext, minutes: number, includeFlash = true):
       topicId: chosen[0]?.topicId, disciplineId: ctx.state.topics.find((t) => t.id === chosen[0]?.topicId)?.disciplineId,
       minutes: revMin, reviewTopicIds: chosen.map((d) => d.topicId),
       instructions: [
-        'Releia seus erros desse tópico (Meus Erros) e a lei seca/resumo nos pontos marcados.',
+        'Releia no seu caderno de erros as linhas desse tópico e a lei seca/resumo nos pontos marcados.',
         chosen.some((d) => d.quickCheck) ? 'Faça uma checagem rápida de 5 questões para recalibrar.' : 'Faça 5 questões rápidas para confirmar que a regra está firme.',
         'Ao concluir, informe quanto acertou — o sistema ajusta o próximo intervalo.',
       ],
-      where: [{ label: 'Meus Erros (filtrado pelo tópico)' }, { label: 'QConcursos — mesmo filtro do tópico', url: LINKS.QC }],
+      where: [{ label: 'Seu caderno de erros (linhas deste tópico)' }, { label: 'QConcursos — mesmo filtro do tópico', url: LINKS.QC }],
       why: 'Revisão no momento certo segura o que você já aprendeu.', status: 'pendente',
     });
   }
@@ -391,9 +406,17 @@ export function buildMission(ctx: MissionContext, input: MissionInput): DailyMis
   }
   let learnMin = 0;
   const mainStats = main ? stats[main.topic.id] : undefined;
-  const needsLearning = main && !cycleTopic && (mode !== 'cansada' || !started) && (!mainStats!.started || (mainStats!.n < 10 && mainStats!.mastery < 50));
+  const mainNextSub = main && main.topic.subtopics.length > 1 ? nextSubtopic(state, main.topic) : null;
+  const needsLearning = main && !cycleTopic && (mode !== 'cansada' || !started) && (
+    !mainStats!.started || (mainStats!.n < 10 && mainStats!.mastery < 50) || (!!mainNextSub && mainStats!.mastery < 75 && phase <= 3));
+  const cal = paceOf(ctx);
   const needsTrapTraining = main && !cycleTopic && mainStats && isDireito(disc(state, main.topic.disciplineId)) && mainStats.n >= 10 && (mainStats.levelB ?? 100) < 60;
-  if (needsLearning) learnMin = Math.min(T >= 150 ? 40 : 30, Math.max(10, r5(T * Math.max(mix.novo, phase >= 4 ? 0.15 : 0))));
+  if (needsLearning) {
+    const nominal = Math.min(T >= 150 ? 40 : 30, Math.max(10, r5(T * Math.max(mix.novo, phase >= 4 ? 0.15 : 0))));
+    // tempo realista: o pedaço de teoria leva o que ele costuma levar para você
+    learnMin = Math.min(Math.max(10, r5(T * 0.6)), Math.max(10, r5(nominal * cal.learn)));
+    if (cal.learn >= 1.2) reasons.push(`Tempo de teoria ajustado ao seu ritmo real (≈ ${cal.learn.toFixed(1).replace('.', ',')}× o previsto inicialmente).`);
+  }
   else if (needsTrapTraining) learnMin = Math.min(20, r5(T * 0.15));
 
   let practice = T - essayMin - reviewMin - learnMin;

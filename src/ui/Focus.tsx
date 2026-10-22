@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { completeReview, completeTask, completeTaskPartial, getToday, skipTask, startTask, useAppState } from '../state/store';
 import { RESULT_META } from '../engine/mastery';
-import { ErrorForm, FlashDeck, LogQuestions } from './Logging';
+import { FlashDeck, LogQuestions } from './Logging';
+import { CADERNO_PDF } from './Errors';
 import { fmtMin, topicName } from './common';
 import type { View } from './App';
 
@@ -50,7 +51,7 @@ export default function Focus({ go }: { go: (v: View) => void }) {
   const over = elapsed / 60 > task.minutes;
   const spent = Math.max(1, Math.round(elapsed / 60));
   const needsLog = (task.kind === 'questoes' || task.kind === 'diagnostico') && task.topicId;
-  const wrongToday = s.attempts.filter((a) => a.date === today && a.topicId === task.topicId && !RESULT_META[a.result].correct && !s.errors.some((e) => e.attemptId === a.id));
+  const wrongToday = s.attempts.filter((a) => a.date === today && a.topicId === task.topicId && !RESULT_META[a.result].correct);
 
   const finish = () => completeTask(task.id, spent);
 
@@ -98,19 +99,20 @@ export default function Focus({ go }: { go: (v: View) => void }) {
 
       {task.kind === 'correcao' && (
         <section className="card stack">
-          <h2>Erros para corrigir</h2>
-          {wrongToday.length === 0 ? <p className="small muted">Nenhum erro pendente de detalhe neste tópico hoje. Se houve dúvidas, releia o comentário delas.</p> : (
-            <ul className="clean">
-              {wrongToday.map((a, i) => (
-                <li key={a.id} className="stack sm">
-                  <button className="btn small" style={{ justifyContent: 'flex-start' }} onClick={() => setOpenErr(openErr === a.id ? null : a.id)}>
-                    {RESULT_META[a.result].emoji} Erro {i + 1} — {RESULT_META[a.result].short} {openErr === a.id ? '▴' : '▾'}
-                  </button>
-                  {openErr === a.id && <div className="card tight"><ErrorForm topicId={a.topicId} reason={a.result} attemptId={a.id} onSaved={() => setOpenErr(null)} /></div>}
-                </li>
-              ))}
-            </ul>
+          <h2>Anote no caderno de erros</h2>
+          {wrongToday.length === 0 ? <p className="small muted">Nenhum erro registrado neste tópico hoje. Se houve questões com dúvida ou chute, releia o comentário delas e anote a regra.</p> : (
+            <>
+              <p className="small">Hoje foram <b>{wrongToday.length} erro(s)</b> neste tópico: {wrongToday.map((a) => RESULT_META[a.result].emoji).join(' ')}</p>
+              <p className="small ink2">Para cada um, uma linha no caderno:</p>
+              <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
+                <li>Data, tópico e código da questão</li>
+                <li>Tipo do erro (não sabia · atenção · interpretação · confusão)</li>
+                <li>Regra correta, em uma frase</li>
+                <li>Pegadinha: o que a banca trocou</li>
+              </ol>
+            </>
           )}
+          <a className="small" href={CADERNO_PDF} target="_blank" rel="noreferrer">Modelo do caderno em PDF ↗</a>
           <button className="btn primary big" onClick={finish}>Concluir correção</button>
         </section>
       )}

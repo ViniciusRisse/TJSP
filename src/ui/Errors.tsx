@@ -1,111 +1,96 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { ResultClass } from '../types';
-import { deleteError, updateError, useAppState, useDerived } from '../state/store';
-import { RESULT_META, RESULT_ORDER } from '../engine/mastery';
-import { formatBR } from '../engine/dates';
-import { ErrorForm } from './Logging';
-import { TopicSelect, topicName } from './common';
+import { deleteError, getToday, useAppState, useDerived } from '../state/store';
+import { RESULT_META } from '../engine/mastery';
+import { addDays, formatBR } from '../engine/dates';
+import { pct, topicName } from './common';
+
+export const CADERNO_PDF = 'https://viniciusrisse.github.io/TJSP/caderno-de-erros.pdf';
+
+const WRONG: ResultClass[] = ['conhecimento', 'atencao', 'interpretacao', 'confusao'];
+
+const TIP: Record<string, string> = {
+  conhecimento: 'Volte à lei seca/resumo só do ponto errado e transforme a regra em flashcard.',
+  atencao: 'Leia o comando até o fim e circule "exceto", "incorreta", "somente", "desde que" antes de olhar as alternativas.',
+  interpretacao: 'Volte ao trecho do texto e compare a alternativa palavra por palavra. Desconfie de "todos", "sempre" e palavras a mais.',
+  confusao: 'Monte um quadro comparativo dos dois institutos (ex.: impedimento × suspeição) e revise o quadro, não a lei inteira.',
+};
 
 export default function Errors() {
   const s = useAppState();
   const d = useDerived();
-  const [topic, setTopic] = useState('');
-  const [reason, setReason] = useState<ResultClass | ''>('');
-  const [onlyRecurring, setOnlyRecurring] = useState(false);
-  const [detail, setDetail] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [newTopic, setNewTopic] = useState('');
+  const today = getToday();
+  const from = addDays(today, -30);
 
-  const conceptCount = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const e of s.errors) if (e.concept) { const k = e.topicId + '|' + e.concept.toLowerCase().trim(); m[k] = (m[k] || 0) + 1; }
-    return m;
-  }, [s.errors]);
-
-  const list = s.errors
-    .filter((e) => (!topic || e.topicId === topic) && (!reason || e.reason === reason))
-    .filter((e) => !onlyRecurring || d.stats[e.topicId]?.recurring || (e.concept && conceptCount[e.topicId + '|' + e.concept.toLowerCase().trim()] >= 2))
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  const undetailed = s.attempts.filter((a) => !RESULT_META[a.result].correct && !s.errors.some((e) => e.attemptId === a.id)).slice(-20).reverse();
-  const recurringTopics = s.topics.filter((t) => d.stats[t.id].recurring);
+  const recent = useMemo(() => s.attempts.filter((a) => a.date >= from && WRONG.includes(a.result)), [s.attempts, from]);
+  const byType = WRONG.map((r) => ({ r, n: recent.filter((a) => a.result === r).length })).sort((a, b) => b.n - a.n);
+  const top = byType[0];
+  const byTopic = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    for (const a of recent) { const t = (m[a.topicId] ||= {}); t[a.result] = (t[a.result] || 0) + 1; }
+    return Object.entries(m).map(([topicId, c]) => ({ topicId, c, total: Object.values(c).reduce((x, y) => x + y, 0) })).sort((a, b) => b.total - a.total);
+  }, [recent]);
 
   return (
-    <div className="page">
+    <div className="page narrow">
       <header className="stack sm">
-        <h1>Meus Erros</h1>
-        <p className="small ink2">Cada erro guarda a regra correta e a pegadinha. Quando o mesmo tipo de erro se repete, o tópico vira ERRO RECORRENTE e sobe de prioridade automaticamente.</p>
+        <h1>Caderno de erros</h1>
+        <p className="small ink2">O caderno é físico (ou em PDF). No site, você só classifica cada questão com as 7 opções. Isso já basta para o sistema identificar erros recorrentes e ajustar as prioridades.</p>
       </header>
 
-      {recurringTopics.length > 0 && (
-        <section className="card stack sm" style={{ borderColor: 'var(--crit)' }}>
-          <div className="eyebrow">Erro recorrente</div>
-          <ul className="clean small">
-            {recurringTopics.map((t) => (
-              <li key={t.id}>🔴 <b>{t.name}</b> — {d.stats[t.id].recurringTypes.map((r) => `${RESULT_META[r].emoji} ${RESULT_META[r].short}`).join(', ') || 'conceito repetido'} · prioridade {Math.round(d.prio[t.id].score)}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="card stack">
+        <h2>Como usar</h2>
+        <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
+          <li>Na <b>correção ativa</b> de cada missão, anote cada erro em uma linha: data, tópico, questão, tipo do erro, regra correta e pegadinha.</li>
+          <li>Nas <b>revisões</b>, releia só as linhas daquele tópico e marque a coluna de revisão (1 dia, 7 dias, 21 dias).</li>
+          <li><b>Uma vez por semana</b> (ex.: domingo), fotografe ou digitalize as páginas da semana em um PDF e me envie numa conversa com: <i>"Analise meu caderno de erros da semana"</i>. Eu aponto os padrões, as pegadinhas que se repetem e monto flashcards e quadros comparativos a partir deles.</li>
+        </ol>
+        <a className="btn primary" href={CADERNO_PDF} target="_blank" rel="noreferrer">Abrir modelo do caderno (PDF para imprimir)</a>
+        <span className="tiny muted">Também serve em caderno comum: basta copiar as colunas do modelo.</span>
+      </section>
 
-      <div className="grid3">
-        <label className="field">Tópico<TopicSelect id="er-topic" state={s} value={topic} onChange={setTopic} /></label>
-        <label className="field">Motivo
-          <select id="er-reason" value={reason} onChange={(e) => setReason(e.target.value as ResultClass)}>
-            <option value="">Todos</option>
-            {RESULT_ORDER.map((r) => <option key={r} value={r}>{RESULT_META[r].emoji} {RESULT_META[r].label}</option>)}
-          </select>
-        </label>
-        <label className="check" style={{ alignSelf: 'end', paddingBottom: 10 }}><input id="er-rec" type="checkbox" checked={onlyRecurring} onChange={(e) => setOnlyRecurring(e.target.checked)} /> Só recorrentes</label>
-      </div>
+      <section className="card stack">
+        <h2>O que o sistema já percebeu (últimos 30 dias)</h2>
+        {recent.length === 0 ? <p className="small muted">Ainda sem erros classificados neste período. Eles aparecem aqui conforme você registra as questões das missões.</p> : (
+          <>
+            <div className="row">{byType.map(({ r, n }) => <span key={r} className="pill">{RESULT_META[r].emoji} {RESULT_META[r].short}: {n} ({pct(n / recent.length)})</span>)}</div>
+            {top && top.n > 0 && (
+              <div className="card tight stack sm">
+                <div className="eyebrow">Seu tipo de erro mais comum: {RESULT_META[top.r].emoji} {RESULT_META[top.r].short}</div>
+                <p className="small">{TIP[top.r]}</p>
+              </div>
+            )}
+            <div className="tablewrap"><table className="t">
+              <thead><tr><th>Tópico</th><th className="r">🔴</th><th className="r">🔵</th><th className="r">🟣</th><th className="r">⚫</th><th className="r">Total</th></tr></thead>
+              <tbody>{byTopic.slice(0, 15).map((x) => (
+                <tr key={x.topicId}>
+                  <td>{d.stats[x.topicId]?.recurring && <span className="pill crit" style={{ marginRight: 6 }}>recorrente</span>}{topicName(s, x.topicId)}</td>
+                  {WRONG.map((r) => <td key={r} className="r">{x.c[r] || ''}</td>)}
+                  <td className="r"><b>{x.total}</b></td>
+                </tr>
+              ))}</tbody>
+            </table></div>
+            <span className="tiny muted">"Recorrente" = o mesmo tipo de erro 3 vezes ou mais no tópico em 30 dias. Esses tópicos já sobem de prioridade nas missões.</span>
+          </>
+        )}
+      </section>
 
-      <div className="row"><button className="btn" onClick={() => setAdding(!adding)}>{adding ? 'Fechar' : '+ Registrar erro manualmente'}</button></div>
-      {adding && (
-        <div className="card stack">
-          <label className="field">Tópico<TopicSelect id="er-new-topic" state={s} value={newTopic} onChange={setNewTopic} /></label>
-          {newTopic && <ErrorForm topicId={newTopic} reason="conhecimento" onSaved={() => setAdding(false)} />}
-        </div>
-      )}
-
-      {undetailed.length > 0 && (
+      {s.errors.length > 0 && (
         <details className="card tight">
-          <summary className="small">Erros registrados sem detalhe ({undetailed.length})</summary>
+          <summary className="small">Registros antigos feitos no site ({s.errors.length})</summary>
           <ul className="clean" style={{ marginTop: 10 }}>
-            {undetailed.map((a) => (
-              <li key={a.id} className="stack sm">
-                <button className="btn small" style={{ justifyContent: 'flex-start' }} onClick={() => setDetail(detail === a.id ? null : a.id)}>{RESULT_META[a.result].emoji} {formatBR(a.date)} · {topicName(s, a.topicId)}</button>
-                {detail === a.id && <div className="card tight"><ErrorForm topicId={a.topicId} reason={a.result} attemptId={a.id} onSaved={() => setDetail(null)} /></div>}
+            {[...s.errors].sort((a, b) => (a.date < b.date ? 1 : -1)).map((e) => (
+              <li key={e.id} className="card tight stack sm">
+                <span className="small"><b>{RESULT_META[e.reason].emoji} {topicName(s, e.topicId)}</b> <span className="muted">· {formatBR(e.date)}</span></span>
+                {e.question && <span className="small">{e.question}</span>}
+                {e.rule && <span className="small"><b>Regra:</b> {e.rule}</span>}
+                {e.trap && <span className="small"><b>Pegadinha:</b> {e.trap}</span>}
+                <button className="btn ghost small danger" style={{ alignSelf: 'flex-start' }} onClick={() => deleteError(e.id)}>Excluir</button>
               </li>
             ))}
           </ul>
         </details>
       )}
-
-      <section className="stack sm">
-        <span className="small muted">{list.length} erro(s)</span>
-        {list.length === 0 && <p className="small muted">Nenhum erro detalhado ainda. Na correção ativa de cada missão, os erros podem ser detalhados em uma linha.</p>}
-        {list.map((e) => {
-          const times = e.concept ? conceptCount[e.topicId + '|' + e.concept.toLowerCase().trim()] : 1;
-          return (
-            <article key={e.id} className="card tight stack sm" style={{ opacity: e.resolved ? 0.6 : 1 }}>
-              <div className="row between">
-                <span className="small"><b>{RESULT_META[e.reason].emoji} {topicName(s, e.topicId)}</b> <span className="muted">· {formatBR(e.date)}</span></span>
-                {times >= 2 && <span className="pill crit">errei este conceito {times}×</span>}
-              </div>
-              <div className="small">{e.question}</div>
-              {(e.myAnswer || e.correctAnswer) && <div className="tiny ink2">Minha: {e.myAnswer || '—'} · Correta: {e.correctAnswer || '—'}</div>}
-              {e.concept && <div className="tiny"><span className="stampchip">{e.concept}</span></div>}
-              {e.rule && <div className="small"><b>Regra:</b> {e.rule}</div>}
-              {e.trap && <div className="small"><b>Pegadinha:</b> {e.trap}</div>}
-              {e.explanation && <div className="small ink2">{e.explanation}</div>}
-              <div className="row">
-                <button className="btn ghost small" onClick={() => updateError(e.id, { resolved: !e.resolved })}>{e.resolved ? 'Reabrir' : 'Marcar como superado'}</button>
-                <button className="btn ghost small danger" onClick={() => deleteError(e.id)}>Excluir</button>
-              </div>
-            </article>
-          );
-        })}
-      </section>
     </div>
   );
 }
