@@ -128,7 +128,8 @@ export default function Focus({ go }: { go: (v: View) => void }) {
         </section>
       )}
 
-      {task.kind === 'flashcards' && (
+      {task.kind === 'flashcards' && task.external && <button className="btn primary big" onClick={finish}>Concluir flashcards</button>}
+      {task.kind === 'flashcards' && !task.external && (
         <section className="card stack"><FlashDeck limit={task.flashcardCount} onFinish={() => finish()} /></section>
       )}
 

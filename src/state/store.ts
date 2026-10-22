@@ -423,7 +423,7 @@ export function deleteEssay(id: string) {
 
 export function updateSettings(patch: Partial<Settings>) {
   setState((s) => {
-    s.settings = { ...s.settings, ...patch, weights: { ...s.settings.weights, ...(patch.weights || {}) }, materials: { ...s.settings.materials, ...(patch.materials || {}) } };
+    s.settings = { ...s.settings, ...patch, weights: { ...s.settings.weights, ...(patch.weights || {}) }, materials: { ...s.settings.materials, ...(patch.materials || {}) }, externalFlash: { ...s.settings.externalFlash, ...(patch.externalFlash || {}) } };
     s.exam.date = s.settings.examDate;
     s.user.region = s.settings.region;
   });

@@ -114,7 +114,7 @@ function learnTask(ctx: MissionContext, t: Topic, minutes: number, why: string, 
     ins.push('Marque prazos, números e as palavras "salvo", "exceto", "inclusive", "desde que", "somente".');
     if (t.traps.includes('instituto-vizinho')) ins.push('Monte um quadro comparativo com o instituto vizinho (ex.: impedimento × suspeição).');
     ins.push('Anotações curtas: só o que a banca pode trocar (prazo, número, exceção, condição). Copiar a lei inteira gasta tempo e rende pouco.');
-    ins.push('Termine criando 2–3 flashcards curtos (um número, uma exceção, uma diferença).');
+    ins.push(`Termine criando 2–3 flashcards curtos ${ctx.state.settings.externalFlash?.enabled ? `no ${ctx.state.settings.externalFlash.name}` : '(aba Revisar)'}: um número, uma exceção, uma diferença.`);
   } else if (d?.id === 'rlm' || d?.id === 'mat') {
     ins.push('Estude o resumo do tópico com 2 exemplos resolvidos, do básico ao intermediário.');
     ins.push('Refaça os exemplos sem olhar a resolução.');
@@ -163,7 +163,7 @@ function questionsTask(ctx: MissionContext, t: Topic, slotMin: number, why: stri
     instructions: [
       'Registre cada questão com a classificação: 🟢 seguro · 🟠 dúvida · 🟡 chute · 🔴 não sabia · 🔵 atenção · 🟣 interpretação · ⚫ confusão.',
       'Para cada erro, leia o comentário/lei e anote no seu CADERNO DE ERROS (físico): tópico, questão, tipo do erro, regra correta e pegadinha — uma linha cada.',
-      'Se a regra for um número, prazo ou exceção, crie também um flashcard (aba Revisar).',
+      `Se a regra for um número, prazo ou exceção, crie também um flashcard ${ctx.state.settings.externalFlash?.enabled ? `no ${ctx.state.settings.externalFlash.name}` : '(aba Revisar)'}.`,
     ],
     where: [{ label: 'Seu caderno de erros (modelo em PDF na aba Caderno de erros)' }], why: 'Correção é onde o erro vira aprendizado.', status: 'pendente',
   };
@@ -490,12 +490,53 @@ function finalize(ctx: MissionContext, input: MissionInput, mode: DailyMission['
   const topic = main ? ctx.state.topics.find((t) => t.id === main.topicId) : undefined;
   const d = topic ? disc(ctx.state, topic.disciplineId) : undefined;
   const objective = mode === 'simulado' ? tasks[0]?.title ?? 'Simulado' : topic ? `${d?.short} — ${topic.name}` : tasks[0]?.title ?? 'Revisão';
+  const withFlash = mode === 'simulado' ? tasks : addExternalFlashcards(ctx, mode, tasks, reasons);
   return {
     date: ctx.today, availableMin: input.minutes, mood: input.mood, phase: ctx.phase, mode,
     headline: 'MISSÃO DE HOJE', message, objective,
-    tasks: tasks.filter((t) => t.minutes > 0),
+    tasks: withFlash.filter((t) => t.minutes > 0),
     reasons, createdAt: Date.now(),
   };
+}
+
+/**
+ * App de flashcards externo: entra como 1ª tarefa (aquecimento curto de evocação) todos os dias.
+ * O tempo sai de dentro da missão — primeiro dos flashcards do site, depois da revisão, depois das questões.
+ */
+function addExternalFlashcards(ctx: MissionContext, mode: DailyMission['mode'], tasks: MissionTask[], reasons: string[]): MissionTask[] {
+  const ef = ctx.state.settings.externalFlash;
+  if (!ef?.enabled) return tasks;
+  const total = tasks.reduce((a, t) => a + t.minutes, 0);
+  const want = mode === 'minima' ? 5 : Math.max(5, Math.min(ef.minutes, Math.round(total * 0.2)));
+  let out = tasks.filter((t) => !(t.kind === 'flashcards' && !t.external)); // um sistema de cartões só
+  let free = total - out.reduce((a, t) => a + t.minutes, 0);
+  let need = want - free;
+  const takeFrom = (pred: (t: MissionTask) => boolean, keepMin: number) => {
+    for (const t of [...out].filter(pred).sort((a, b) => b.minutes - a.minutes)) {
+      if (need <= 0) return;
+      const cut = Math.min(need, Math.max(0, t.minutes - keepMin));
+      if (cut <= 0) continue;
+      if (t.questions && (t.kind === 'questoes' || t.kind === 'diagnostico')) t.questions = Math.max(5, Math.round(t.questions * (t.minutes - cut) / t.minutes));
+      t.minutes -= cut; need -= cut;
+    }
+  };
+  takeFrom((t) => t.kind === 'revisao', 5);
+  takeFrom((t) => t.kind === 'questoes' || t.kind === 'diagnostico' || t.kind === 'correcao', 5);
+  takeFrom((t) => t.kind === 'aprendizado', 10);
+  const minutes = Math.max(3, want - Math.max(0, need));
+  const studied = ctx.state.topics.filter((t) => ctx.stats[t.id]?.started).length;
+  const flash: MissionTask = {
+    id: uid('t-'), kind: 'flashcards', external: true, title: `Aquecimento — flashcards${/flashcard/i.test(ef.name) ? '' : ` (${ef.name})`}`, minutes,
+    instructions: [
+      `Abra o ${ef.name} e faça só os cartões que ele marcar para hoje (revisões vencidas).`,
+      studied > 0 ? `Cartões novos: no máximo ${ef.newPerDay} por dia, e só de tópicos que você já estudou.` : 'Ainda sem tópicos estudados: hoje, só as revisões que o app pedir (sem cartões novos).',
+      `Pare quando der ${minutes} min, mesmo que sobrem cartões: o app reagenda os que ficarem.`,
+      'Responda antes de virar o cartão — o esforço de lembrar é o que fixa.',
+    ],
+    where: [{ label: ef.name }], why: 'Evocação curta logo no início aquece a memória e tira a missão da inércia.', status: 'pendente',
+  };
+  reasons.push(`Flashcards no ${ef.name} como aquecimento diário (${minutes} min), dentro do tempo do dia.`);
+  return [flash, ...out];
 }
 
 export function missionMinutes(m: DailyMission): number {

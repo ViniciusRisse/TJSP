@@ -119,6 +119,20 @@ export default function Ajustes() {
       </section>
 
       <section className="card stack">
+        <h2>App de flashcards</h2>
+        <label className="check"><input id="aj-ef-on" type="checkbox" checked={st.externalFlash.enabled} onChange={(e) => updateSettings({ externalFlash: { ...st.externalFlash, enabled: e.target.checked } })} />Uso outro app de flashcards (entra como aquecimento em toda missão)</label>
+        {st.externalFlash.enabled && (
+          <div className="grid3">
+            <label className="field">Nome do app<input id="aj-ef-name" type="text" value={st.externalFlash.name} onChange={(e) => updateSettings({ externalFlash: { ...st.externalFlash, name: e.target.value || 'seu app de flashcards' } })} placeholder="ex.: Anki" /></label>
+            <label className="field">Minutos por dia<input id="aj-ef-min" type="number" min={3} max={45} value={st.externalFlash.minutes} onChange={(e) => updateSettings({ externalFlash: { ...st.externalFlash, minutes: Number(e.target.value) || 10 } })} /></label>
+            <label className="field">Cartões novos por dia<input id="aj-ef-new" type="number" min={0} max={50} value={st.externalFlash.newPerDay} onChange={(e) => updateSettings({ externalFlash: { ...st.externalFlash, newPerDay: Number(e.target.value) } })} /></label>
+          </div>
+        )}
+        <span className="tiny muted">O tempo dos flashcards sai de dentro da missão, nunca soma por cima. Com o app ligado, os flashcards do site deixam de entrar nas missões (continuam na aba Revisar).</span>
+        <button className="btn small" style={{ alignSelf: 'flex-start' }} onClick={() => { regenerateMission(); toast('Missão de hoje recalculada.'); }}>Aplicar na missão de hoje</button>
+      </section>
+
+      <section className="card stack">
         <h2>Materiais</h2>
         <label className="check"><input id="aj-m-qc" type="checkbox" checked={st.materials.qconcursos} onChange={(e) => updateSettings({ materials: { ...st.materials, qconcursos: e.target.checked } })} />QConcursos (filtros indicados em cada tarefa)</label>
         <label className="check"><input id="aj-m-ap" type="checkbox" checked={st.materials.apostila} onChange={(e) => updateSettings({ materials: { ...st.materials, apostila: e.target.checked } })} />Apostila Nova Concursos — TJSP Escrevente</label>

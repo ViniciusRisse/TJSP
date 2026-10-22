@@ -68,6 +68,7 @@ export default function Review({ go }: { go: (v: View) => void }) {
         {deck ? <div className="card"><FlashDeck onFinish={() => setDeck(false)} /></div>
           : <button className="btn primary" disabled={!cards.length} onClick={() => setDeck(true)}>Revisar {cards.length} flashcards</button>}
         <NewFlashcard />
+        <ExportCards />
         <button className="btn ghost small" onClick={() => go('erros')}>Ir para o Caderno de erros</button>
       </section>
     </div>
@@ -96,6 +97,29 @@ function NewFlashcard() {
         <span className="tiny muted">Cartão curto: uma informação por cartão.</span>
         <button className="btn" type="submit" disabled={!topicId || !front || !back}>Salvar</button>
       </form>
+    </details>
+  );
+}
+
+/** Copia os cartões do site em texto "frente<TAB>verso", formato que Anki e outros apps importam. */
+function ExportCards() {
+  const s = useAppState();
+  const toast = useToast();
+  const [shown, setShown] = useState(false);
+  const clean = (x: string) => x.replace(/\t/g, ' ').replace(/\r?\n/g, '<br>');
+  const text = s.flashcards.map((c) => `${clean(c.front)}\t${clean(c.back)}\t${(s.topics.find((t) => t.id === c.topicId)?.name || '').replace(/\s+/g, '_')}`).join('\n');
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); toast(`${s.flashcards.length} cartões copiados.`); }
+    catch { setShown(true); toast('Selecione o texto abaixo e copie.'); }
+  };
+  return (
+    <details className="card tight">
+      <summary className="small">Levar os cartões do site para o {s.settings.externalFlash?.name || 'seu app'}</summary>
+      <div className="stack sm" style={{ marginTop: 10 }}>
+        <p className="small ink2">Copia os {s.flashcards.length} cartões (incluindo os dispositivos que a VUNESP repetiu nas provas) no formato frente · verso · etiqueta do tópico, separados por TAB. No Anki: Arquivo → Importar → cole num arquivo .txt.</p>
+        <div className="row"><button className="btn small" onClick={copy}>Copiar cartões</button><button className="btn ghost small" onClick={() => setShown(!shown)}>{shown ? 'Esconder texto' : 'Mostrar texto'}</button></div>
+        {shown && <textarea id="export-cards" readOnly rows={6} value={text} onFocus={(e) => e.target.select()} />}
+      </div>
     </details>
   );
 }

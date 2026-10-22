@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   materials: { qconcursos: true, apostila: true, videos: true },
   essayPerWeek: 1,
   showReasons: true,
+  externalFlash: { enabled: true, name: 'seu app de flashcards', minutes: 10, newPerDay: 10 },
 };
 
 export function seedFlashcards(now: number): Flashcard[] {
@@ -61,7 +62,7 @@ export function migrate(raw: any): AppState {
   const base = createInitialState(raw?.user?.createdAt ?? Date.now());
   if (!raw || typeof raw !== 'object') return base;
   const s: AppState = { ...base, ...raw };
-  s.settings = { ...base.settings, ...(raw.settings || {}), weights: { ...base.settings.weights, ...(raw.settings?.weights || {}) }, materials: { ...base.settings.materials, ...(raw.settings?.materials || {}) } };
+  s.settings = { ...base.settings, ...(raw.settings || {}), weights: { ...base.settings.weights, ...(raw.settings?.weights || {}) }, materials: { ...base.settings.materials, ...(raw.settings?.materials || {}) }, externalFlash: { ...base.settings.externalFlash, ...(raw.settings?.externalFlash || {}) } };
   s.exam = { ...base.exam, ...(raw.exam || {}), essay: { ...base.exam.essay, ...(raw.exam?.essay || {}) } };
   s.exam.date = s.settings.examDate;
   s.user = { ...base.user, ...(raw.user || {}) };

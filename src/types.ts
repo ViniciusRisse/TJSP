@@ -177,7 +177,8 @@ export interface MissionTask {
   flashcardCount?: number;
   simulationId?: string;
   partial?: boolean;
-  subtopicId?: string;      // pedaço da teoria desta tarefa       // tarefa feita só em parte (tempo real registrado)
+  subtopicId?: string;      // pedaço da teoria desta tarefa
+  external?: boolean;       // tarefa feita em outro app (ex.: app de flashcards)       // tarefa feita só em parte (tempo real registrado)
 }
 
 export interface DailyMission {
@@ -323,6 +324,7 @@ export interface Settings {
   materials: { qconcursos: boolean; apostila: boolean; videos: boolean };
   essayPerWeek: number;
   showReasons: boolean;
+  externalFlash: { enabled: boolean; name: string; minutes: number; newPerDay: number }; // app de flashcards externo
 }
 
 export interface DistractionLog { date: string; minutes: number }

@@ -195,7 +195,7 @@ describe('ciclo aberto (teoria feita, questões pendentes)', () => {
     const m = buildMission(ctx(s), { minutes: 60, mood: 'normal' });
     expect(m.resumedFrom?.topicId).toBe('pp-cit');
     expect(m.message).toContain('fechar esse ciclo');
-    expect(m.tasks[0].topicId).toBe('pp-cit');
+    expect(m.tasks.find((t) => !t.external)!.topicId).toBe('pp-cit');
     expect(m.tasks.some((t) => t.topicId === 'pp-cit' && t.kind === 'questoes')).toBe(true);
     expect(m.tasks.some((t) => t.topicId === 'pp-cit' && t.kind === 'aprendizado')).toBe(false);
     expect(missionMinutes(m)).toBeLessThanOrEqual(65);
@@ -245,5 +245,27 @@ describe('teoria por partes e ritmo real', () => {
     const learn = m.tasks.find((t) => t.kind === 'aprendizado')!;
     expect(learn.minutes).toBeGreaterThanOrEqual(45);
     expect(missionMinutes(m)).toBeLessThanOrEqual(125);
+  });
+});
+
+describe('app de flashcards externo', () => {
+  it('entra como primeira tarefa, dentro do tempo do dia, e substitui os flashcards do site', () => {
+    const s = createInitialState();
+    s.flashcards = s.flashcards.map((c) => ({ ...c, nextDate: TODAY }));
+    s.attempts = attempts('pt-conc', 'port', rep('seguro', 10), addDays(TODAY, -2));
+    for (const min of [40, 60, 120]) {
+      const m = buildMission(ctx(s), { minutes: min, mood: 'normal' });
+      expect(m.tasks[0].external).toBe(true);
+      expect(m.tasks.filter((t) => t.kind === 'flashcards').length).toBe(1);
+      expect(missionMinutes(m)).toBeLessThanOrEqual(min + 5);
+    }
+    const mal = buildMission(ctx(s), { minutes: 60, mood: 'mal' });
+    expect(mal.tasks[0].external).toBe(true);
+    expect(mal.tasks[0].minutes).toBe(5);
+  });
+  it('desligado nas configurações, não aparece', () => {
+    const s = createInitialState();
+    s.settings.externalFlash.enabled = false;
+    expect(buildMission(ctx(s), { minutes: 60, mood: 'normal' }).tasks.some((t) => t.external)).toBe(false);
   });
 });
