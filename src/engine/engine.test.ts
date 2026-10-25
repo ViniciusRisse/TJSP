@@ -269,3 +269,32 @@ describe('app de flashcards externo', () => {
     expect(buildMission(ctx(s), { minutes: 60, mood: 'normal' }).tasks.some((t) => t.external)).toBe(false);
   });
 });
+
+describe('um tema por dia', () => {
+  function setup() {
+    const s = createInitialState();
+    s.attempts = ['dc-art5', 'pt-interp', 'in-excel'].flatMap((id) => attempts(id, s.topics.find((t) => t.id === id)!.disciplineId, [...rep('seguro', 6), ...rep('conhecimento', 4)], addDays(TODAY, -8)));
+    for (const id of ['dc-art5', 'pt-interp', 'in-excel']) s.reviews[id] = { topicId: id, stage: 1, ease: 2, intervalDays: 1, nextDate: addDays(TODAY, -1), lastDate: addDays(TODAY, -2), history: [] };
+    return s;
+  }
+  it('só um tema novo/prático por dia; revisões separadas, no máximo 2, sem repetir o tema do dia', () => {
+    const s = setup();
+    const m = buildMission(ctx(s, '2026-10-27'), { minutes: 120, mood: 'normal' }); // terça
+    const mainTopics = new Set(m.tasks.filter((t) => ['aprendizado', 'questoes', 'correcao'].includes(t.kind)).map((t) => t.topicId));
+    expect(mainTopics.size).toBe(1);
+    const revs = m.tasks.filter((t) => t.kind === 'revisao');
+    expect(revs.length).toBeLessThanOrEqual(2);
+    for (const r of revs) { expect(r.reviewTopicIds!.length).toBe(1); expect(mainTopics.has(r.topicId)).toBe(false); }
+    expect(m.tasks.some((t) => t.kind === 'redacao')).toBe(false);
+    expect(missionMinutes(m)).toBeLessThanOrEqual(125);
+  });
+  it('redação só no dia escolhido (sábado), com tempo real', () => {
+    const s = setup();
+    const sat = buildMission(ctx(s, '2026-10-31'), { minutes: 120, mood: 'normal' });
+    const essay = sat.tasks.find((t) => t.kind === 'redacao');
+    expect(essay).toBeDefined();
+    expect(essay!.minutes).toBeGreaterThanOrEqual(40);
+    s.settings.essayWeekday = 3;
+    expect(buildMission(ctx(s, '2026-10-31'), { minutes: 120, mood: 'normal' }).tasks.some((t) => t.kind === 'redacao')).toBe(false);
+  });
+});

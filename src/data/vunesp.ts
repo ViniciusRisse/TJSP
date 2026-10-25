@@ -207,9 +207,9 @@ export const ESSAY_RULES = [
 ];
 
 export const ESSAY_PHASES = [
-  { phase: 1, name: 'Leitura e tese', task: 'Ler uma coletânea/editorial e escrever a tese do autor e a sua em 2–3 linhas.', minutes: 20 },
-  { phase: 2, name: 'Argumentação curta', task: 'Escrever 1 parágrafo argumentativo (tópico frasal + argumento + exemplo/repertório).', minutes: 25 },
-  { phase: 3, name: 'Introdução e desenvolvimento', task: 'Escrever introdução com tese + 1 parágrafo de desenvolvimento completo.', minutes: 40 },
-  { phase: 4, name: 'Redação completa', task: 'Redação completa de 25 a 30 linhas, à mão, com autoavaliação pelos critérios.', minutes: 75 },
-  { phase: 5, name: 'Simulado no tempo', task: 'Redação completa em 1h15, em folha de 33 linhas, sem consulta.', minutes: 75 },
+  { phase: 1, name: 'Leitura e tese', task: 'Ler uma coletânea/editorial e escrever a tese do autor e a sua em 2–3 linhas.', minutes: 40 },
+  { phase: 2, name: 'Argumentação curta', task: 'Escrever 1 parágrafo argumentativo (tópico frasal + argumento + exemplo/repertório).', minutes: 40 },
+  { phase: 3, name: 'Introdução e desenvolvimento', task: 'Escrever introdução com tese + 1 parágrafo de desenvolvimento completo.', minutes: 60 },
+  { phase: 4, name: 'Redação completa', task: 'Redação completa de 25 a 30 linhas, à mão, com autoavaliação pelos critérios.', minutes: 90 },
+  { phase: 5, name: 'Simulado no tempo', task: 'Redação completa em 1h15, em folha de 33 linhas, sem consulta.', minutes: 90 },
 ];

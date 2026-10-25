@@ -19,13 +19,15 @@ export const DEFAULT_SETTINGS: Settings = {
   reviewIntervals: [1, 7, 21, 45, 90],
   retaFinalDays: 21,
   performanceDays: 45,
-  dailyReviewCap: 4,
+  dailyReviewCap: 2,
   idleNudgeSeconds: 120,
   distractionGoalMin: 20,
   syncEnabled: false,
   materials: { qconcursos: true, apostila: true, videos: true },
   essayPerWeek: 1,
   showReasons: true,
+  oneTopicPerDay: true,
+  essayWeekday: 6,
   externalFlash: { enabled: true, name: 'seu app de flashcards', minutes: 10, newPerDay: 10 },
 };
 
@@ -63,6 +65,7 @@ export function migrate(raw: any): AppState {
   if (!raw || typeof raw !== 'object') return base;
   const s: AppState = { ...base, ...raw };
   s.settings = { ...base.settings, ...(raw.settings || {}), weights: { ...base.settings.weights, ...(raw.settings?.weights || {}) }, materials: { ...base.settings.materials, ...(raw.settings?.materials || {}) }, externalFlash: { ...base.settings.externalFlash, ...(raw.settings?.externalFlash || {}) } };
+  if (raw.settings?.dailyReviewCap === 4) s.settings.dailyReviewCap = 2; // antigo padrão → revisões curtas e definidas
   s.exam = { ...base.exam, ...(raw.exam || {}), essay: { ...base.exam.essay, ...(raw.exam?.essay || {}) } };
   s.exam.date = s.settings.examDate;
   s.user = { ...base.user, ...(raw.user || {}) };

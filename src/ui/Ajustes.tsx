@@ -99,6 +99,12 @@ export default function Ajustes() {
           <label className="field">Reta final a partir de (dias antes)<input id="aj-reta" type="number" value={st.retaFinalDays} onChange={(e) => updateSettings({ retaFinalDays: Number(e.target.value) })} /></label>
           <label className="field">Lembrete "sua missão já está pronta" após (segundos)<input id="aj-idle" type="number" min={30} value={st.idleNudgeSeconds} onChange={(e) => updateSettings({ idleNudgeSeconds: Number(e.target.value) })} /></label>
         </div>
+        <label className="check"><input id="aj-onetopic" type="checkbox" checked={st.oneTopicPerDay} onChange={(e) => updateSettings({ oneTopicPerDay: e.target.checked })} />Um tema por dia (sem tema secundário na missão)</label>
+        <label className="field">Dia da redação
+          <select id="aj-essayday" value={st.essayWeekday} onChange={(e) => updateSettings({ essayWeekday: Number(e.target.value) })}>
+            {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((w, i) => <option key={w} value={i}>{w}</option>)}
+          </select>
+        </label>
         <label className="check"><input id="aj-reasons" type="checkbox" checked={st.showReasons} onChange={(e) => updateSettings({ showReasons: e.target.checked })} />Mostrar "Por que esta missão?"</label>
       </section>
 

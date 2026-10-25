@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getToday, isLoaded, startMission, useAppState, useDerived, subscribe } from '../state/store';
+import { getState, getToday, isLoaded, startMission, useAppState, useDerived, subscribe } from '../state/store';
 import { daysLeft } from '../engine/priority';
 import { ToastProvider } from './common';
 import Home from './Home';
@@ -60,6 +60,14 @@ export default function App() {
 }
 
 function Shell({ view, setView }: { view: View; setView: (v: View) => void }) {
+  const [taskSel, setTaskSel] = useState<string | null>(null);
+  const openTask = (id?: string) => {
+    const m = getState().missions[getToday()];
+    const target = id ?? m?.tasks.find((t) => t.status === 'pendente')?.id ?? null;
+    startMission();
+    setTaskSel(target);
+    setView('foco');
+  };
   const s = useAppState();
   const d = useDerived();
   const left = daysLeft(s, getToday());
@@ -67,7 +75,7 @@ function Shell({ view, setView }: { view: View; setView: (v: View) => void }) {
 
   let content;
   switch (view) {
-    case 'foco': content = <Focus go={go} />; break;
+    case 'foco': content = <Focus go={go} taskSel={taskSel} setTaskSel={setTaskSel} />; break;
     case 'mapa': content = <MapView go={go} />; break;
     case 'revisar': content = <Review go={go} />; break;
     case 'erros': content = <Errors />; break;
@@ -77,7 +85,7 @@ function Shell({ view, setView }: { view: View; setView: (v: View) => void }) {
     case 'redacao': content = <Redacao />; break;
     case 'ajustes': content = <Ajustes />; break;
     case 'mais': content = <More go={go} />; break;
-    default: content = <Home go={go} />;
+    default: content = <Home go={go} openTask={openTask} />;
   }
   return (
     <div className="shell">
@@ -101,7 +109,7 @@ function Shell({ view, setView }: { view: View; setView: (v: View) => void }) {
           );
         })}
       </nav>
-      {view !== 'foco' && <IdleNudge onStart={() => { startMission(); go('foco'); }} />}
+      {view !== 'foco' && <IdleNudge onStart={() => openTask()} />}
     </div>
   );
 }

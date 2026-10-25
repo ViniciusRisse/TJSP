@@ -324,6 +324,8 @@ export interface Settings {
   materials: { qconcursos: boolean; apostila: boolean; videos: boolean };
   essayPerWeek: number;
   showReasons: boolean;
+  oneTopicPerDay: boolean;  // um tema principal por dia (sem tema secundário)
+  essayWeekday: number;     // dia da semana da redação (0 = domingo … 6 = sábado)
   externalFlash: { enabled: boolean; name: string; minutes: number; newPerDay: number }; // app de flashcards externo
 }
 

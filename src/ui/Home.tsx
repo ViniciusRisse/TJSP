@@ -22,7 +22,7 @@ const KIND_LABEL: Record<string, string> = {
   redacao: 'Redação', simulado: 'Simulado', leiseca: 'Lei seca', diagnostico: 'Diagnóstico',
 };
 
-export default function Home({ go }: { go: (v: View) => void }) {
+export default function Home({ go, openTask }: { go: (v: View) => void; openTask: (id?: string) => void }) {
   const s = useAppState();
   const d = useDerived();
   const today = getToday();
@@ -60,7 +60,7 @@ export default function Home({ go }: { go: (v: View) => void }) {
         <section className="card hero stack" aria-labelledby="missao">
           <div className="row between">
             <h1 id="missao" style={{ fontSize: '1.45rem', letterSpacing: '.03em' }}>{completed ? 'MISSÃO CONCLUÍDA' : 'MISSÃO DE HOJE'}</h1>
-            <span className="mono small">⏱ {fmtMin(missionMinutes(m))}</span>
+            <span className="mono small">⏱ ≈ {fmtMin(missionMinutes(m))}</span>
           </div>
           <div className="stack sm">
             <div className="eyebrow">🎯 Objetivo</div>
@@ -73,19 +73,26 @@ export default function Home({ go }: { go: (v: View) => void }) {
             )}
           </div>
           <div>
-            {m.tasks.map((t, i) => (
-              <div key={t.id} className={`task ${t.status !== 'pendente' ? 'done' : ''}`}>
-                <div className="n">{t.status === 'feita' ? '✓' : i + 1}</div>
-                <div className="stack sm" style={{ gap: 2, minWidth: 0 }}>
-                  <div className="tiny" style={{ opacity: .8, fontWeight: 650, textTransform: 'uppercase', letterSpacing: '.06em' }}>{KIND_LABEL[t.kind]}</div>
-                  <div className="ttl" style={{ fontWeight: 600 }}>{t.title.replace(/^[^—]+— /, '')}{t.questions && (t.kind === 'questoes' || t.kind === 'diagnostico') ? ` · ${t.questions} questões` : ''}</div>
+            {m.tasks.map((t, i) => {
+              const pend = t.status === 'pendente';
+              return (
+                <div key={t.id} className={`task ${!pend ? 'done' : ''}`} role={pend ? 'button' : undefined} tabIndex={pend ? 0 : undefined}
+                  style={{ cursor: pend ? 'pointer' : 'default' }} onClick={() => pend && openTask(t.id)} onKeyDown={(e) => pend && e.key === 'Enter' && openTask(t.id)}
+                  aria-label={pend ? `Começar por: ${t.title}` : undefined}>
+                  <div className="n">{t.status === 'feita' ? '✓' : i + 1}</div>
+                  <div className="stack sm" style={{ gap: 2, minWidth: 0 }}>
+                    <div className="tiny" style={{ opacity: .8, fontWeight: 650, textTransform: 'uppercase', letterSpacing: '.06em' }}>{KIND_LABEL[t.kind]}</div>
+                    <div className="ttl" style={{ fontWeight: 600 }}>{t.kind === 'flashcards' || t.kind === 'redacao' ? t.title : t.title.replace(/^[^—]+— /, '')}{t.questions && (t.kind === 'questoes' || t.kind === 'diagnostico') ? ` · ${t.questions} questões` : ''}</div>
+                  </div>
+                  <div className="min">≈ {t.minutes} min</div>
                 </div>
-                <div className="min">{t.minutes} min</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          {!completed && m.availableMin - missionMinutes(m) >= 10 && <p className="small" style={{ fontWeight: 600 }}>+ ≈ {fmtMin(m.availableMin - missionMinutes(m))} de folga para o que levar mais tempo.</p>}
+          {!completed && <p className="tiny" style={{ opacity: .85 }}>A ordem é sua: toque em qualquer tarefa para começar por ela. Os tempos são estimativas — se algo levar mais, tudo bem; o que ficar pendente volta amanhã.</p>}
           {!completed ? (
-            <button className="btn big" onClick={() => { startMission(); go('foco'); }}>
+            <button className="btn big" onClick={() => openTask()}>
               {done > 0 ? `Continuar (${done}/${total})` : 'Começar missão'}
             </button>
           ) : (

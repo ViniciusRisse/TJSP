@@ -6,11 +6,12 @@ import { CADERNO_PDF } from './Errors';
 import { fmtMin, topicName } from './common';
 import type { View } from './App';
 
-export default function Focus({ go }: { go: (v: View) => void }) {
+export default function Focus({ go, taskSel, setTaskSel }: { go: (v: View) => void; taskSel: string | null; setTaskSel: (id: string | null) => void }) {
   const s = useAppState();
   const today = getToday();
   const m = s.missions[today];
-  const task = m?.tasks.find((t) => t.status === 'pendente');
+  const pending = m?.tasks.filter((t) => t.status === 'pendente') ?? [];
+  const task = pending.find((t) => t.id === taskSel);
   const idx = m ? m.tasks.findIndex((t) => t.id === task?.id) : -1;
   const [now, setNow] = useState(Date.now());
   const [stage, setStage] = useState<'fazer' | 'registrar'>('fazer');
@@ -24,6 +25,31 @@ export default function Focus({ go }: { go: (v: View) => void }) {
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   if (!m) return <div className="page narrow"><p>Missão ainda não gerada.</p><button className="btn" onClick={() => go('hoje')}>Voltar</button></div>;
+
+  if (!task && pending.length > 0) {
+    return (
+      <div className="page narrow focus-wrap">
+        <div className="row between">
+          <button className="btn ghost small" onClick={() => go('hoje')}>← Missão</button>
+          <span className="mono small muted">{m.tasks.length - pending.length} de {m.tasks.length} feitas</span>
+        </div>
+        <section className="card stack">
+          <h1 style={{ fontSize: '1.4rem' }}>{m.tasks.length - pending.length > 0 ? 'Tarefa concluída. Qual é a próxima?' : 'Por qual tarefa você quer começar?'}</h1>
+          <p className="small ink2">A ordem é sua. Se não quiser decidir, comece pela primeira.</p>
+          <ul className="clean">
+            {pending.map((t, i) => (
+              <li key={t.id}>
+                <button className={`btn ${i === 0 ? 'primary' : ''}`} style={{ width: '100%', justifyContent: 'space-between', textAlign: 'left' }} onClick={() => setTaskSel(t.id)}>
+                  <span>{t.title}{t.questions && (t.kind === 'questoes' || t.kind === 'diagnostico') ? ` · ${t.questions} questões` : ''}</span>
+                  <span className="mono small" style={{ whiteSpace: 'nowrap', flex: 'none' }}>≈ {t.minutes} min</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    );
+  }
 
   if (!task) {
     const todays = s.attempts.filter((a) => a.date === today);
@@ -59,7 +85,7 @@ export default function Focus({ go }: { go: (v: View) => void }) {
     <div className="page narrow focus-wrap">
       <div className="row between">
         <button className="btn ghost small" onClick={() => go('hoje')}>← Missão</button>
-        <span className="mono small muted">tarefa {idx + 1} de {m.tasks.length}</span>
+        <button className="btn ghost small" onClick={() => setTaskSel(null)}>Trocar tarefa</button>
       </div>
       {idx === 0 && elapsed < 90 && <p className="tiny muted">Celular longe, notificações em silêncio. Só esta tarefa existe agora.</p>}
 
@@ -70,9 +96,9 @@ export default function Focus({ go }: { go: (v: View) => void }) {
         </div>
         <div className="row between">
           <span className={`timer ${over ? '' : ''}`} aria-live="off">{mm}:{ss}</span>
-          <span className="mono ink2">meta {task.minutes} min{task.questions && task.kind !== 'correcao' ? ` · ${task.questions} questões` : ''}</span>
+          <span className="mono ink2">estimativa ≈ {task.minutes} min{task.questions && task.kind !== 'correcao' ? ` · ${task.questions} questões` : ''}</span>
         </div>
-        {over && <p className="small muted">Passou do tempo previsto — tudo bem. Conclua quando terminar.</p>}
+        {over && <p className="small muted">Passou da estimativa — tudo bem, o tempo real é o seu. O sistema aprende com isso.</p>}
 
         <ol className="stack sm" style={{ margin: 0, paddingLeft: 20 }}>
           {task.instructions.map((x, i) => <li key={i}>{x}</li>)}

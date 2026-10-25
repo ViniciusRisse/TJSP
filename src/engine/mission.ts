@@ -376,6 +376,7 @@ export function buildMission(ctx: MissionContext, input: MissionInput): DailyMis
   }
 
   // ───── NORMAL / CANSADA ─────
+  if (state.settings.oneTopicPerDay) return focusedMission(ctx, input, mode, T, message, reasons, started, ret.protocolStep);
   const mix = { ...PHASE_MIX[phase] };
   if (mode === 'cansada' || ret.protocolStep === 2) mix.novo = mode === 'cansada' ? 0 : mix.novo / 2;
 
@@ -490,7 +491,7 @@ function finalize(ctx: MissionContext, input: MissionInput, mode: DailyMission['
   const topic = main ? ctx.state.topics.find((t) => t.id === main.topicId) : undefined;
   const d = topic ? disc(ctx.state, topic.disciplineId) : undefined;
   const objective = mode === 'simulado' ? tasks[0]?.title ?? 'Simulado' : topic ? `${d?.short} — ${topic.name}` : tasks[0]?.title ?? 'Revisão';
-  const withFlash = mode === 'simulado' ? tasks : addExternalFlashcards(ctx, mode, tasks, reasons);
+  const withFlash = mode === 'simulado' ? tasks : addExternalFlashcards(ctx, mode, tasks, reasons, T);
   return {
     date: ctx.today, availableMin: input.minutes, mood: input.mood, phase: ctx.phase, mode,
     headline: 'MISSÃO DE HOJE', message, objective,
@@ -499,14 +500,119 @@ function finalize(ctx: MissionContext, input: MissionInput, mode: DailyMission['
   };
 }
 
+/** Revisões do dia, uma tarefa por tópico, com tempo definido. */
+function definedReviews(ctx: MissionContext, n: number, perMin: number, exclude?: string): MissionTask[] {
+  const due = dueReviews(ctx.state, ctx.today, ctx.prio).filter((d) => d.topicId !== exclude).slice(0, n);
+  return due.map((d) => {
+    const t = ctx.state.topics.find((x) => x.id === d.topicId)!;
+    return {
+      id: uid('t-'), kind: 'revisao' as const, title: `Revisão — ${t.name}`, topicId: t.id, disciplineId: t.disciplineId,
+      minutes: perMin, reviewTopicIds: [t.id],
+      instructions: [
+        'Releia no seu caderno de erros as linhas deste tópico e os pontos marcados na lei/resumo (sem reestudar tudo).',
+        d.quickCheck ? 'Faça 5 questões rápidas para recalibrar.' : 'Faça 5 questões rápidas para confirmar que a regra está firme.',
+        'Ao concluir, informe quanto acertou — o sistema ajusta a próxima data.',
+      ],
+      where: [{ label: 'Seu caderno de erros (linhas deste tópico)' }, ...(t.qcFilter ? [{ label: t.qcFilter, url: LINKS.QC }] : [])],
+      why: 'Revisão programada: segura o que você já aprendeu.', status: 'pendente' as const,
+    };
+  });
+}
+
+/**
+ * Missão focada: UM tema por dia + revisões programadas + flashcards; redação no dia dela, com tempo real.
+ * Sem tema secundário. Tempos são estimativas; o que não couber volta pela regra do ciclo aberto.
+ */
+function focusedMission(ctx: MissionContext, input: MissionInput, mode: DailyMission['mode'], T: number, message: string, reasons: string[], started: boolean, protocolStep: number | null): DailyMission {
+  const { state, stats, phase, today } = ctx;
+  const tasks: MissionTask[] = [];
+  const ef = state.settings.externalFlash;
+  const flashMin = ef?.enabled ? Math.max(5, Math.min(ef.minutes, Math.round(T * 0.2))) : 0;
+  let budget = T - flashMin;
+
+  // Redação: só no dia escolhido, com tempo real
+  const ep = essayPhaseFor(state, phase);
+  const isEssayDay = mode === 'normal' && new Date(today + 'T12:00:00').getDay() === state.settings.essayWeekday && essayDueThisWeek(state, today);
+  let essayMin = 0;
+  if (isEssayDay) {
+    essayMin = Math.min(ESSAY_PHASES[ep - 1].minutes, Math.max(30, budget - 10));
+    budget -= essayMin;
+    reasons.push(`Dia de redação (etapa ${ep}), com tempo real para fazer com calma.`);
+  }
+
+  // O tema do dia (ou fechar o ciclo aberto). No dia da redação, só tema já estudado (questões).
+  const cycle = findOpenCycle(state, today);
+  const cycleTopic = cycle ? state.topics.find((t) => t.id === cycle.topicId) : undefined;
+  const main = cycleTopic && ctx.prio[cycleTopic.id]
+    ? { topic: cycleTopic, pr: ctx.prio[cycleTopic.id], adjusted: 0 }
+    : pickTopics(ctx, { onlyStarted: (mode === 'cansada' || isEssayDay) && started })
+        .find((p) => !isEssayDay || stats[p.topic.id]?.started);
+
+  // Revisões programadas: no máximo N por dia, cada uma com tempo próprio (o tema do dia não entra)
+  const perReview = T >= 150 ? 15 : 10;
+  const capByTime = T >= 100 ? state.settings.dailyReviewCap : T >= 45 ? 1 : 0;
+  const maxReviews = Math.min(capByTime, isEssayDay ? 1 : state.settings.dailyReviewCap);
+  const reviews = definedReviews(ctx, Math.min(maxReviews, Math.max(0, Math.floor((budget - 25) / perReview))), perReview, main?.topic.id);
+  budget -= reviews.reduce((a, r) => a + r.minutes, 0);
+
+  // Flashcards do site só quando não há app externo
+  if (!ef?.enabled && dueFlashcards(state, today, ctx.prio).length && budget >= 35) {
+    tasks.push({ id: uid('t-'), kind: 'flashcards', title: 'Flashcards do dia', minutes: 10, flashcardCount: 20, instructions: ['Responda antes de virar o cartão.', 'Avalie com honestidade: errei / difícil / acertei / fácil.'], where: [{ label: 'Aba Revisar → Flashcards' }], why: 'Cartões curtos fixam prazos, números e exceções.', status: 'pendente' });
+    budget -= 10;
+  }
+
+  if (main && budget >= (isEssayDay ? 25 : 15)) {
+    const ms = stats[main.topic.id];
+    const nextSub = main.topic.subtopics.length > 1 ? nextSubtopic(state, main.topic) : null;
+    const noNew = mode === 'cansada' && started;
+    const needsLearning = !cycleTopic && !noNew && !isEssayDay && (!ms.started || (ms.n < 10 && ms.mastery < 50) || (!!nextSub && ms.mastery < 75 && phase <= 3));
+    const why = main.pr.reasons.join(' · ');
+    let practice = budget;
+    if (needsLearning) {
+      const cal = paceOf(ctx);
+      const nominal = protocolStep === 2 ? 20 : 30;
+      let learnMin = Math.max(15, r5(nominal * cal.learn));
+      learnMin = Math.min(learnMin, budget >= 50 ? budget - 25 : Math.max(10, budget - 15)); // sempre sobra tempo para questões
+      tasks.push(learnTask(ctx, main.topic, learnMin, why, !ms.started && T < 60));
+      practice = budget - learnMin;
+      if (cal.learn >= 1.2) reasons.push(`Tempo de teoria ajustado ao seu ritmo real (≈ ${cal.learn.toFixed(1).replace('.', ',')}× o previsto inicialmente).`);
+    }
+    // bloco de questões com teto: o que sobrar vira folga para o que levar mais tempo
+    const PRACTICE_CAP = 50;
+    if (practice > PRACTICE_CAP) {
+      const extra = practice - PRACTICE_CAP;
+      const learn = tasks.find((t) => t.kind === 'aprendizado' && t.topicId === main.topic.id);
+      if (learn) learn.minutes += Math.min(15, extra);
+      practice = PRACTICE_CAP;
+    }
+    const qs = questionsTask(ctx, main.topic, practice, cycleTopic ? 'Fechar o ciclo: a teoria já foi feita.' : why, true);
+    if (cycleTopic) {
+      qs[0].title = `Questões — ${main.topic.name} (fechando o ciclo)`;
+      qs[0].instructions.unshift('A teoria já foi feita. Comece direto pelas questões, sem reler antes: o esforço de lembrar é o que fixa o conteúdo.');
+      message = `Você estudou a teoria de ${cycleTopic.name}. Vamos fechar esse ciclo com as questões.`;
+      reasons.push(`Ciclo aberto: teoria de ${cycleTopic.name} feita, questões pendentes.`);
+    }
+    tasks.push(...qs);
+    reasons.push(`Tema do dia — ${disc(state, main.topic.disciplineId)?.short}: ${main.topic.name}. ${main.pr.reasons.join('; ')}`);
+    if (!message) message = isEssayDay ? `Hoje é dia de redação, com um bloco curto de ${disc(state, main.topic.disciplineId)?.short}.` : `Tema do dia: ${disc(state, main.topic.disciplineId)?.short}. Um tema só, com calma.`;
+  } else if (isEssayDay && !message) {
+    message = 'Hoje é dia de redação. Sem tema novo: só a redação e o que estiver programado para revisar.';
+  }
+  tasks.push(...reviews);
+  if (essayMin) tasks.push(essayTask(ctx, essayMin));
+  const m = finalize(ctx, input, mode, T, message, tasks, reasons);
+  if (cycle && cycleTopic && main?.topic.id === cycleTopic.id) m.resumedFrom = cycle;
+  return m;
+}
+
 /**
  * App de flashcards externo: entra como 1ª tarefa (aquecimento curto de evocação) todos os dias.
  * O tempo sai de dentro da missão — primeiro dos flashcards do site, depois da revisão, depois das questões.
  */
-function addExternalFlashcards(ctx: MissionContext, mode: DailyMission['mode'], tasks: MissionTask[], reasons: string[]): MissionTask[] {
+function addExternalFlashcards(ctx: MissionContext, mode: DailyMission['mode'], tasks: MissionTask[], reasons: string[], dayMin?: number): MissionTask[] {
   const ef = ctx.state.settings.externalFlash;
   if (!ef?.enabled) return tasks;
-  const total = tasks.reduce((a, t) => a + t.minutes, 0);
+  const total = Math.max(dayMin ?? 0, tasks.reduce((a, t) => a + t.minutes, 0));
   const want = mode === 'minima' ? 5 : Math.max(5, Math.min(ef.minutes, Math.round(total * 0.2)));
   let out = tasks.filter((t) => !(t.kind === 'flashcards' && !t.external)); // um sistema de cartões só
   let free = total - out.reduce((a, t) => a + t.minutes, 0);
