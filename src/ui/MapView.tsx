@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { BlockId, Topic } from '../types';
-import { getToday, logStudy, useAppState, useDerived } from '../state/store';
+import { getToday, logStudy, setSubtopicStudied, useAppState, useDerived } from '../state/store';
 import { masteryLabel, RESULT_META, STATUS_META, type TopicStatus } from '../engine/mastery';
 import { expectedQuestions, histCount } from '../engine/priority';
 import { formatBR } from '../engine/dates';
@@ -161,9 +161,10 @@ function TopicDetail({ topic, onClose, go }: { topic: Topic; onClose: () => void
           </div>
           <div className="stack sm">
             <div className="eyebrow">Subtemas — teoria estudada {(s.subtopicProgress?.[topic.id] || []).length} de {topic.subtopics.length}</div>
+            <span className="tiny muted">Marque as partes que você já estudou (inclusive em outro aparelho). A missão segue para a próxima.</span>
             <ul className="clean small">
               {topic.subtopics.map((x) => (
-                <li key={x.id}>{(s.subtopicProgress?.[topic.id] || []).includes(x.id) ? '✓' : '•'} {x.name}{x.articles && <> <span className="stampchip">{x.articles}</span></>}{x.note && <span className="muted"> — {x.note}</span>}</li>
+                <li key={x.id}><label className="check" style={{ display: 'inline-flex' }}><input id={`sub-${x.id}`} type="checkbox" checked={(s.subtopicProgress?.[topic.id] || []).includes(x.id)} onChange={(e) => setSubtopicStudied(topic.id, x.id, e.target.checked)} aria-label={`Teoria estudada: ${x.name}`} /></label> {x.name}{x.articles && <> <span className="stampchip">{x.articles}</span></>}{x.note && <span className="muted"> — {x.note}</span>}</li>
               ))}
             </ul>
           </div>

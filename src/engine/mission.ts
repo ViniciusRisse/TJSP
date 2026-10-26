@@ -565,7 +565,8 @@ function focusedMission(ctx: MissionContext, input: MissionInput, mode: DailyMis
     const ms = stats[main.topic.id];
     const nextSub = main.topic.subtopics.length > 1 ? nextSubtopic(state, main.topic) : null;
     const noNew = mode === 'cansada' && started;
-    const needsLearning = !cycleTopic && !noNew && !isEssayDay && (!ms.started || (ms.n < 10 && ms.mastery < 50) || (!!nextSub && ms.mastery < 75 && phase <= 3));
+    const studiedAll = main.topic.subtopics.length > 0 && (state.subtopicProgress?.[main.topic.id] || []).length >= main.topic.subtopics.length;
+    const needsLearning = !cycleTopic && !noNew && !isEssayDay && !studiedAll && (!ms.started || (ms.n < 10 && ms.mastery < 50) || (!!nextSub && ms.mastery < 75 && phase <= 3));
     const why = main.pr.reasons.join(' · ');
     let practice = budget;
     if (needsLearning) {

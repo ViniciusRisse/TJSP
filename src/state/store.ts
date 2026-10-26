@@ -257,6 +257,33 @@ export function dismissCycle() {
   setMissionParams(m.availableMin, m.mood);
 }
 
+/** Marca partes da teoria como já estudadas (ex.: estudadas em outro aparelho). */
+export function setSubtopicStudied(topicId: string, subId: string, studied: boolean) {
+  setState((s) => {
+    const list = new Set((s.subtopicProgress ||= {})[topicId] || []);
+    if (studied) list.add(subId); else list.delete(subId);
+    s.subtopicProgress[topicId] = [...list];
+  });
+}
+
+/** "Já estudei esta parte": marca a parte, tira a tarefa da missão e recalcula o resto do dia. */
+export function alreadyStudied(taskId: string) {
+  const today = getToday();
+  const m = state.missions[today];
+  const t = m?.tasks.find((x) => x.id === taskId);
+  if (!m || !t?.topicId) return;
+  const topic = state.topics.find((x) => x.id === t.topicId);
+  setState((s) => {
+    const list = new Set((s.subtopicProgress ||= {})[t.topicId!] || []);
+    if (t.subtopicId) list.add(t.subtopicId);
+    else topic?.subtopics.forEach((x) => list.add(x.id));
+    s.subtopicProgress[t.topicId!] = [...list];
+    const mm = s.missions[today];
+    if (mm) mm.tasks = mm.tasks.filter((x) => x.id !== taskId); // sai da lista: não foi pulada, já estava feita
+  });
+  setMissionParams(m.availableMin, m.mood);
+}
+
 /** Parei no meio: registra o tempo real e marca a tarefa como feita em parte. */
 export function completeTaskPartial(taskId: string, minutesSpent: number) {
   completeTask(taskId, minutesSpent, true);

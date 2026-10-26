@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { completeReview, completeTask, completeTaskPartial, getToday, skipTask, startTask, useAppState } from '../state/store';
+import { alreadyStudied, completeReview, completeTask, completeTaskPartial, getToday, skipTask, startTask, useAppState } from '../state/store';
 import { RESULT_META } from '../engine/mastery';
 import { FlashDeck, LogQuestions } from './Logging';
 import { CADERNO_PDF } from './Errors';
@@ -176,6 +176,9 @@ export default function Focus({ go, taskSel, setTaskSel }: { go: (v: View) => vo
       {(task.kind === 'aprendizado' || task.kind === 'leiseca') && (
         <>
           <button className="btn primary big" onClick={finish}>Concluir tarefa</button>
+          {task.kind === 'aprendizado' && (
+            <button className="btn small" onClick={() => { alreadyStudied(task.id); setTaskSel(null); }}>Já estudei esta parte (antes ou em outro aparelho)</button>
+          )}
           {!partialOpen ? (
             <button className="btn small" onClick={() => { setPartialMin(String(Math.max(5, Math.round(elapsed / 60)))); setPartialOpen(true); }}>Parei no meio — registrar o que fiz</button>
           ) : (
