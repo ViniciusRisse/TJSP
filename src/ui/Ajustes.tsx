@@ -6,6 +6,7 @@ import {
 } from '../state/store';
 import { saveFile, syncAvailable } from '../state/sync';
 import { useToast } from './common';
+import SyncConflictCard from './SyncConflict';
 import { paceCalibration } from '../engine/pace';
 
 const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -161,6 +162,25 @@ export default function Ajustes() {
         </ul>
       </section>
 
+      <SyncConflictCard />
+      <section className="card stack">
+        <h2>Levar meus dados para outro aparelho</h2>
+        <p className="small ink2">Cada aparelho guarda os próprios dados. Para continuar em outro aparelho sem perder nada:</p>
+        <div className="stack sm">
+          <b className="small">Opção 1 — sincronizar (versão do claude.ai)</b>
+          <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
+            <li>No aparelho <b>que tem os dados</b>, ligue "Sincronizar entre aparelhos" (aqui embaixo) e espere alguns segundos.</li>
+            <li>No aparelho novo, abra o mesmo link, entre na mesma conta do claude.ai e ligue a mesma opção.</li>
+            <li>Os dados aparecem sozinhos. Se os dois tiverem estudos diferentes, o sistema pergunta qual cópia usar.</li>
+          </ol>
+          <b className="small">Opção 2 — backup (funciona em qualquer versão)</b>
+          <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
+            <li>No aparelho <b>que tem os dados</b>: "Copiar backup" e cole numa mensagem para você mesma (e-mail ou WhatsApp).</li>
+            <li>No aparelho novo: copie o texto da mensagem, abra "Colar backup" aqui embaixo, cole e toque em "Importar texto colado".</li>
+          </ol>
+        </div>
+      </section>
+
       <section className="card stack">
         <h2>Dados, backup e privacidade</h2>
         <p className="small">Seus dados ficam neste navegador (IndexedDB{save.ls ? ' + cópia local' : ''}). Nada é enviado a serviços externos. {s.attempts.length} questões, {s.errors.length} erros, {s.flashcards.length} flashcards.</p>
@@ -182,7 +202,7 @@ export default function Ajustes() {
         </details>
         <div className="divider" />
         <div className="stack sm">
-          <label className="check"><input id="aj-sync" type="checkbox" checked={st.syncEnabled} disabled={!syncAvailable()} onChange={async (e) => { await setSync(e.target.checked); toast(e.target.checked ? 'Sincronização ligada.' : 'Sincronização desligada.'); }} />Sincronizar entre PC e celular</label>
+          <label className="check"><input id="aj-sync" type="checkbox" checked={st.syncEnabled} disabled={!syncAvailable()} onChange={async (e) => { await setSync(e.target.checked); toast(e.target.checked ? 'Sincronização ligada.' : 'Sincronização desligada.'); }} />Sincronizar entre aparelhos (PC, tablet, celular)</label>
           <span className="tiny muted">{syncAvailable() ? `Guarda uma cópia na sua área privada do claude.ai (só você acessa). Status: ${getSyncStatus()}.` : 'Disponível quando o sistema é aberto pelo claude.ai. Sem isso, use Exportar/Importar backup para levar os dados a outro aparelho.'}</span>
         </div>
         <div className="divider" />

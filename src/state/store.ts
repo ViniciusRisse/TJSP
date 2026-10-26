@@ -20,7 +20,7 @@ import { computeRisk } from '../engine/metrics';
 let state: AppState = createInitialState();
 let loaded = false;
 let saveStatus: { idb: boolean; ls: boolean } = { idb: false, ls: false };
-let syncStatus: 'desligada' | 'ok' | 'indisponivel' | 'erro' | 'enviando' = 'desligada';
+let syncStatus: 'desligada' | 'ok' | 'indisponivel' | 'erro' | 'enviando' | 'conflito' = 'desligada';
 const listeners = new Set<() => void>();
 let saveTimer: any = null;
 let syncTimer: any = null;
@@ -46,11 +46,15 @@ function scheduleSave() {
     saveStatus = await saveRaw(state);
     emit();
   }, 300);
-  if (state.settings.syncEnabled) {
+  if (state.settings.syncEnabled && !syncConflict) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(async () => {
       syncStatus = 'enviando'; emit();
-      syncStatus = await sync.push(state);
+      if (syncConflict) { syncStatus = 'conflito'; emit(); return; }
+      // a nuvem tem mais estudo do que este aparelho? busca antes de sobrescrever
+      const info = await sync.remoteInfo();
+      if (info && typeof info.amount === 'number' && info.amount > studyAmount(state)) { await pullRemote(); return; }
+      syncStatus = await sync.push(state, studyAmount(state));
       emit();
     }, 4000);
   }
@@ -76,24 +80,67 @@ export async function init(): Promise<void> {
   if (state.settings.syncEnabled) void pullRemote();
 }
 
-export async function pullRemote(): Promise<'atualizado' | 'local-mais-novo' | 'vazio' | 'indisponivel'> {
+/** Quanto estudo um estado guarda (para nunca trocar dados de verdade por um aparelho vazio). */
+export function studyAmount(x: Partial<AppState> | null | undefined): number {
+  if (!x) return 0;
+  const done = Object.values(x.missions || {}).reduce((a, m: any) => a + (m.tasks || []).filter((t: any) => t.status === 'feita').length, 0);
+  return (x.attempts?.length || 0) + (x.sessions?.length || 0) + (x.essays?.length || 0) + (x.simulationResults?.length || 0) + done;
+}
+
+export interface SyncConflict { localAmount: number; remoteAmount: number; remoteUpdatedAt: number; localAttempts: number; remoteAttempts: number }
+let syncConflict: SyncConflict | null = null;
+let remoteCache: any = null;
+export function getSyncConflict() { return syncConflict; }
+
+/**
+ * Sincronização segura:
+ * - nuvem vazia → envia este aparelho;
+ * - este aparelho sem estudo e nuvem com estudo → usa a nuvem;
+ * - a nuvem tem mais estudo e é mais recente → usa a nuvem;
+ * - os dois têm estudo diferente → pergunta à estudante (nada é enviado até ela escolher).
+ */
+export async function pullRemote(): Promise<'atualizado' | 'local-mais-novo' | 'vazio' | 'indisponivel' | 'conflito'> {
   if (!sync.syncAvailable()) { syncStatus = 'indisponivel'; emit(); return 'indisponivel'; }
   const info = await sync.remoteInfo();
-  if (!info) { syncStatus = 'ok'; emit(); scheduleSave(); return 'vazio'; }
-  if (info.updatedAt > state.updatedAt) {
-    const remote = await sync.pull();
-    if (remote) {
-      state = migrate(remote);
-      saveStatus = await saveRaw(state);
-      syncStatus = 'ok';
-      emit();
-      return 'atualizado';
-    }
+  if (!info) { syncConflict = null; syncStatus = 'ok'; emit(); scheduleSave(); return 'vazio'; }
+  const remote = await sync.pull();
+  if (!remote) { syncStatus = 'erro'; emit(); return 'indisponivel'; }
+  const local = studyAmount(state), rem = studyAmount(remote);
+  const adopt = async () => {
+    const keepSync = state.settings.syncEnabled;
+    state = migrate(remote);
+    state.settings.syncEnabled = keepSync;
+    saveStatus = await saveRaw(state);
+    syncConflict = null; syncStatus = 'ok'; emit(); onOpen();
+    return 'atualizado' as const;
+  };
+  if (local === rem && JSON.stringify(remote.attempts || []).length === JSON.stringify(state.attempts).length) {
+    syncConflict = null; syncStatus = 'ok'; emit(); return 'local-mais-novo';
   }
-  syncStatus = 'ok';
-  scheduleSave();
-  emit();
-  return 'local-mais-novo';
+  if (local === 0 && rem > 0) return adopt();
+  if (rem === 0 && local > 0) { syncConflict = null; syncStatus = 'ok'; emit(); scheduleSave(); return 'local-mais-novo'; }
+  if (rem > local && (remote.updatedAt || 0) >= state.updatedAt - 60_000) return adopt();
+  if (local > rem && state.updatedAt >= (remote.updatedAt || 0)) { syncConflict = null; syncStatus = 'ok'; emit(); scheduleSave(); return 'local-mais-novo'; }
+  remoteCache = remote;
+  syncConflict = { localAmount: local, remoteAmount: rem, remoteUpdatedAt: remote.updatedAt || info.updatedAt, localAttempts: state.attempts.length, remoteAttempts: (remote.attempts || []).length };
+  syncStatus = 'conflito'; emit();
+  return 'conflito';
+}
+
+/** A estudante escolhe qual cópia vale quando os dois aparelhos têm estudo diferente. */
+export async function resolveSyncConflict(use: 'nuvem' | 'aparelho') {
+  if (!syncConflict) return;
+  if (use === 'nuvem' && remoteCache) {
+    const keepSync = state.settings.syncEnabled;
+    state = migrate(remoteCache);
+    state.settings.syncEnabled = keepSync;
+    saveStatus = await saveRaw(state);
+    syncConflict = null; remoteCache = null; syncStatus = 'ok'; emit(); onOpen();
+  } else {
+    syncConflict = null; remoteCache = null; syncStatus = 'ok';
+    state = { ...state, updatedAt: Date.now() };
+    emit(); scheduleSave();
+  }
 }
 
 /** Executa ao abrir: retorno após ausência, relatório semanal, missão do dia. */
@@ -506,7 +553,10 @@ export function importAttemptsCSV(text: string): { ok: number; skipped: number }
 }
 
 export async function setSync(enabled: boolean) {
-  updateSettings({ syncEnabled: enabled });
+  // liga sem marcar o estado como "mais novo" (isso fazia um aparelho vazio parecer mais recente)
+  state = { ...state, settings: { ...state.settings, syncEnabled: enabled } };
+  saveStatus = await saveRaw(state);
+  emit();
   if (enabled) await pullRemote();
   else { syncStatus = 'desligada'; emit(); }
 }

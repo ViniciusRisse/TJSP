@@ -10,6 +10,7 @@ import { formatBR, weekday } from '../engine/dates';
 import { fmtMin, Meter, pct, RiskPill, topicName } from './common';
 import { lsGet, lsSet } from '../state/persist';
 import type { View } from './App';
+import SyncConflictCard from './SyncConflict';
 
 const MOODS: { id: Mood; label: string }[] = [
   { id: 'normal', label: 'Normal' },
@@ -52,6 +53,7 @@ export default function Home({ go, openTask }: { go: (v: View) => void; openTask
         <div className="countdown"><span>Faltam</span><b className="num">{left}</b><span>dias para a prova ({formatBR(s.settings.examDate)}).</span></div>
       </header>
 
+      <SyncConflictCard />
       {!s.user.onboarded && <Onboarding />}
 
       {ret.message && !completed && <div className="card tight" role="status"><b>{ret.message}</b></div>}
@@ -191,6 +193,7 @@ function Onboarding() {
         <li>Prova: 14/03/2027 · Circunscrição de Jundiaí (5ª CJ). A opção de comarca não vincula a nomeação.</li>
         <li>Tempo padrão: 1h (seg–qua), 2h (qui–sáb); domingo opcional. Ajuste em Ajustes.</li>
         <li>Seus dados ficam neste aparelho. Faça backup em Ajustes de vez em quando.</li>
+        <li><b>Já usa o sistema em outro aparelho?</b> Vá em Ajustes → "Levar meus dados para outro aparelho".</li>
       </ul>
       <label className="field">Como prefere ser chamada? (opcional)
         <input id="onb-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />

@@ -35,7 +35,7 @@ function col(c: Ctx) {
   return c.db.collection('data/users/' + c.uid);
 }
 
-export interface RemoteInfo { updatedAt: number; chunks: number; size: number; device?: string }
+export interface RemoteInfo { updatedAt: number; chunks: number; size: number; device?: string; amount?: number }
 
 export async function remoteInfo(): Promise<RemoteInfo | null> {
   const c = await getCtx();
@@ -70,7 +70,7 @@ export async function pull(): Promise<any | null> {
 let pushing = false;
 let pending: any = null;
 
-export async function push(state: { updatedAt: number }): Promise<'ok' | 'indisponivel' | 'erro'> {
+export async function push(state: { updatedAt: number }, amount?: number): Promise<'ok' | 'indisponivel' | 'erro'> {
   const c = await getCtx();
   if (!c) return 'indisponivel';
   if (pushing) { pending = state; return 'ok'; }
@@ -80,14 +80,14 @@ export async function push(state: { updatedAt: number }): Promise<'ok' | 'indisp
     const n = Math.ceil(json.length / CHUNK);
     const prev = await remoteInfo();
     for (let i = 0; i < n; i++) await col(c).doc('c' + i).set({ s: json.slice(i * CHUNK, (i + 1) * CHUNK) });
-    await col(c).doc('manifest').set({ updatedAt: state.updatedAt, chunks: n, size: json.length, device: navigator.userAgent.slice(0, 80) });
+    await col(c).doc('manifest').set({ updatedAt: state.updatedAt, chunks: n, size: json.length, device: navigator.userAgent.slice(0, 80), amount: amount ?? null });
     if (prev && prev.chunks > n) for (let i = n; i < prev.chunks; i++) await col(c).doc('c' + i).delete();
     return 'ok';
   } catch {
     return 'erro';
   } finally {
     pushing = false;
-    if (pending) { const p = pending; pending = null; void push(p); }
+    if (pending) { const p = pending; pending = null; void push(p, amount); }
   }
 }
 
