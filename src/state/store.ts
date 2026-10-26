@@ -6,6 +6,7 @@ import type {
   SessionKind, Settings, Simulation, SimulationResult, TaskKind,
 } from '../types';
 import { createInitialState, LOCKED_DATE, migrate } from './seed';
+import { mergeStates } from './merge';
 import { loadRaw, saveRaw } from './persist';
 import * as sync from './sync';
 import { addDays, diffDays, today as todayFn, uid } from '../engine/dates';
@@ -128,8 +129,16 @@ export async function pullRemote(): Promise<'atualizado' | 'local-mais-novo' | '
 }
 
 /** A estudante escolhe qual cópia vale quando os dois aparelhos têm estudo diferente. */
-export async function resolveSyncConflict(use: 'nuvem' | 'aparelho') {
+export async function resolveSyncConflict(use: 'nuvem' | 'aparelho' | 'juntar') {
   if (!syncConflict) return;
+  if (use === 'juntar' && remoteCache) {
+    const keepSync = state.settings.syncEnabled;
+    state = studyAmount(remoteCache) >= studyAmount(state) ? mergeStates(remoteCache, state) : mergeStates(state, remoteCache);
+    state.settings.syncEnabled = keepSync;
+    syncConflict = null; remoteCache = null; syncStatus = 'ok';
+    saveStatus = await saveRaw(state); emit(); scheduleSave(); onOpen();
+    return;
+  }
   if (use === 'nuvem' && remoteCache) {
     const keepSync = state.settings.syncEnabled;
     state = migrate(remoteCache);
@@ -511,11 +520,18 @@ export function exportJSON(): string {
   return JSON.stringify({ app: 'projeto-tjsp', exportedAt: new Date().toISOString(), state }, null, 1);
 }
 
-export function importJSON(text: string): { ok: boolean; message: string } {
+export function importJSON(text: string, mode: 'juntar' | 'substituir' = 'juntar'): { ok: boolean; message: string } {
   try {
     const parsed = JSON.parse(text);
     const raw = parsed?.state ?? parsed;
     if (!raw || !raw.topics || !raw.user) return { ok: false, message: 'Arquivo não reconhecido. Use um backup exportado pelo Projeto TJSP.' };
+    if (mode === 'juntar') {
+      const keepSync = state.settings.syncEnabled;
+      state = studyAmount(raw) >= studyAmount(state) ? mergeStates(raw, state) : mergeStates(state, raw);
+      state.settings.syncEnabled = keepSync;
+      scheduleSave(); emit(); onOpen();
+      return { ok: true, message: `Dados juntados: ${state.attempts.length} questões e ${state.sessions.length} sessões de estudo no total.` };
+    }
     state = migrate(raw);
     state.updatedAt = Date.now();
     scheduleSave();

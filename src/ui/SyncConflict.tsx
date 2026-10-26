@@ -12,16 +12,17 @@ export default function SyncConflictCard() {
   return (
     <div className="card stack sm" style={{ borderColor: 'var(--warn)', borderWidth: 2 }} role="alert">
       <b>Este aparelho e a nuvem têm estudos diferentes.</b>
-      <p className="small">Escolha qual cópia usar. A outra não será apagada até você escolher.</p>
+      <p className="small">O recomendado é juntar: soma o que você estudou nos dois aparelhos, sem perder nada.</p>
+      <button className="btn primary" disabled={busy} onClick={async () => { setBusy(true); await resolveSyncConflict('juntar'); }}>Juntar os dois (recomendado)</button>
       <div className="grid2">
-        <button className="btn primary" disabled={busy} onClick={async () => { setBusy(true); await resolveSyncConflict('nuvem'); }}>
+        <button className="btn" disabled={busy} onClick={async () => { setBusy(true); await resolveSyncConflict('nuvem'); }}>
           Usar a da nuvem ({c.remoteAttempts} questões · salva em {when})
         </button>
         <button className="btn" disabled={busy} onClick={async () => { setBusy(true); await resolveSyncConflict('aparelho'); }}>
           Usar a deste aparelho ({c.localAttempts} questões)
         </button>
       </div>
-      <span className="tiny muted">Na dúvida, use a que tem mais questões.</span>
+      <span className="tiny muted">As outras opções usam só uma das cópias.</span>
     </div>
   );
 }

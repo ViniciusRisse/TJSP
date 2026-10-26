@@ -176,7 +176,7 @@ export default function Ajustes() {
           <b className="small">Opção 2 — backup (funciona em qualquer versão)</b>
           <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
             <li>No aparelho <b>que tem os dados</b>: "Copiar backup" e cole numa mensagem para você mesma (e-mail ou WhatsApp).</li>
-            <li>No aparelho novo: copie o texto da mensagem, abra "Colar backup" aqui embaixo, cole e toque em "Importar texto colado".</li>
+            <li>No aparelho novo: copie o texto da mensagem, abra "Colar backup" aqui embaixo, cole e toque em "Juntar com os dados deste aparelho". Nada do que você já fez aqui se perde.</li>
           </ol>
         </div>
       </section>
@@ -188,13 +188,17 @@ export default function Ajustes() {
           <button className="btn primary" onClick={doExport}>Exportar backup (JSON)</button>
           <button className="btn" onClick={copyExport}>Copiar backup</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>Importar backup</button>
-          <input ref={fileRef} id="aj-import" type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f, (t) => toast(importJSON(t).message)); e.target.value = ''; }} />
+          <input ref={fileRef} id="aj-import" type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f, (t) => toast(importJSON(t, 'juntar').message)); e.target.value = ''; }} />
         </div>
         <details>
           <summary className="small">Colar backup ou importar questões em CSV</summary>
           <div className="stack sm" style={{ marginTop: 8 }}>
             <textarea id="aj-paste" rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Cole aqui o JSON do backup" />
-            <button className="btn small" style={{ alignSelf: 'flex-start' }} disabled={!paste.trim()} onClick={() => { toast(importJSON(paste).message); setPaste(''); }}>Importar texto colado</button>
+            <div className="row">
+              <button className="btn primary small" disabled={!paste.trim()} onClick={() => { toast(importJSON(paste, 'juntar').message); setPaste(''); }}>Juntar com os dados deste aparelho</button>
+              <button className="btn small" disabled={!paste.trim()} onClick={() => { toast(importJSON(paste, 'substituir').message); setPaste(''); }}>Substituir tudo</button>
+            </div>
+            <span className="tiny muted">"Juntar" soma o backup com o que já existe aqui, sem perder nada (recomendado).</span>
             <p className="tiny muted">CSV de questões (preparado para planilhas/QConcursos): colunas <span className="mono">topico;resultado;data;ano;codigo</span>. "topico" = id ou nome do tópico; "resultado" = seguro, duvida, chute, conhecimento, atencao, interpretacao ou confusao.</p>
             <button className="btn small" style={{ alignSelf: 'flex-start' }} onClick={() => csvRef.current?.click()}>Importar CSV de questões</button>
             <input ref={csvRef} id="aj-csv" type="file" accept=".csv,text/csv,text/plain" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f, (t) => { const r = importAttemptsCSV(t); toast(`${r.ok} questões importadas, ${r.skipped} linhas ignoradas.`); }); e.target.value = ''; }} />
